@@ -470,12 +470,19 @@ VIEWS.vermoegen = () => {
     ${propVal ? (() => {
       const debt = S.assets.filter((a) => a.type === 'schulden').reduce((s2, a) => s2 + Math.abs(assetValue(a) || 0), 0);
       const eq = propVal - debt, share = Math.max(0, Math.min(1, eq / propVal));
+      if (!debt) {
+        return `<h2>🏢 Deine Immobilie</h2><div class="card">
+          <div class="kv"><span>Marktwert</span><b>${eur(propVal)}</b></div>
+          <p class="note" style="margin:8px 0 12px">Hast du die Immobilie mit einem Kredit finanziert? Trag die aktuelle Restschuld ein – dann siehst du hier dein echtes Eigenkapital und wie viel Prozent dir schon gehören.</p>
+          <button class="btn primary block" data-a="addLoan">+ Kredit / Restschuld eintragen</button></div>`;
+      }
       return `<h2>🏢 Deine Immobilie</h2><div class="card">
         <div class="row spread"><span class="sub small">Eigenkapital</span><span class="sub small">${Math.round(share * 100)} % gehören dir</span></div>
         <div class="big num" style="font-size:30px">${eur0(eq)}</div>
         <div class="meter"><i style="width:${share * 100}%;background:linear-gradient(90deg,#fb718588,#fb7185)"></i></div>
         <div class="kv"><span>Marktwert</span><b>${eur(propVal)}</b></div>
-        <div class="kv"><span>Restschuld (Kredite & Schulden)</span><b class="neg">−${eur(debt)}</b></div></div>`;
+        <div class="kv"><span>Restschuld</span><b class="neg">−${eur(debt)}</b></div>
+        <button class="btn sm" style="margin-top:10px" data-a="addLoan">+ Weiteren Kredit</button></div>`;
     })() : ''}
     ${hist.length > 1 ? `<h2>Entwicklung</h2><div class="card"><span class="sub small">Nettovermögen</span>${lineChart(hist, '#22c55e')}</div>` : ''}
     ${groups.length ? groups.map((g) => `<h2>${g.t[1]} ${g.t[2]}</h2><div class="list">${g.items.map((a) => {
@@ -490,12 +497,12 @@ VIEWS.vermoegen = () => {
     <div style="height:70px"></div>`;
 };
 
-function assetSheet(a) {
+function assetSheet(a, preset) {
   const isNew = !a;
-  a = a || { name: '', type: 'konto', history: [] };
+  a = a || Object.assign({ name: '', type: 'konto', history: [] }, preset);
   const v = assetValue(a);
   sheetCtx = { kind: 'asset', id: isNew ? null : a.id };
-  openSheet(`<div class="sh-head"><h3>${isNew ? 'Neuer Topf' : esc(a.name)}</h3>${isNew ? '' : '<p class="sub" style="margin:4px 0 0">Neuen Kontostand eintragen – der alte bleibt im Verlauf.</p>'}</div>
+  openSheet(`<div class="sh-head"><h3>${isNew ? (a.type === 'schulden' ? 'Kredit eintragen' : 'Neuer Topf') : esc(a.name)}</h3>${isNew && a.type === 'schulden' ? '<p class="sub" style="margin:4px 0 0">Trag die aktuelle Restschuld laut Bank ein – nicht die ursprüngliche Kreditsumme.</p>' : ''}${isNew ? '' : '<p class="sub" style="margin:4px 0 0">Neuen Kontostand eintragen – der alte bleibt im Verlauf.</p>'}</div>
     <div class="sh-body stack">
       <input class="amount-in" id="fAmount" inputmode="decimal" placeholder="0,00 €" value="${v !== null ? esc(String(Math.abs(v)).replace('.', ',')) : ''}" autocomplete="off">
       <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(a.name)}" placeholder="z. B. Tagesgeld ING, ETF-Depot, Goldsparplan"></label>
@@ -583,7 +590,7 @@ function donut(items, top, bottom, opts = {}) {
     arcs += `<circle cx="100" cy="100" r="${r}" class="dn-arc" stroke="${it.color}" stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-off}" style="animation-delay:${i * 70}ms"/>`;
     off += c * it.v / total;
   });
-  const legend = opts.legend === false ? '' : `<div class="dn-leg">${items.map((it) => `<div class="dn-row"><i style="background:${it.color}"></i><span class="grow">${esc(it.label)}</span><b class="num">${eur0(it.v)}</b><span class="muted num small" style="width:40px;text-align:right">${Math.round(100 * it.v / total)} %</span></div>`).join('')}</div>`;
+  const legend = opts.legend === false ? '' : `<div class="dn-leg">${items.map((it) => `<div class="dn-row"><i style="background:${it.color}"></i><span class="grow">${esc(it.label)}</span><b class="num">${eur0(it.v)}</b><span class="muted num small" style="width:48px;text-align:right;white-space:nowrap">${Math.round(100 * it.v / total)} %</span></div>`).join('')}</div>`;
   return `<div class="dn"><svg viewBox="0 0 200 200" class="dn-svg"><circle cx="100" cy="100" r="${r}" class="dn-bg"/><g transform="rotate(-90 100 100)">${arcs}</g>
     <text x="100" y="96" text-anchor="middle" class="dn-top">${esc(top)}</text><text x="100" y="118" text-anchor="middle" class="dn-bot">${esc(bottom)}</text></svg></div>${legend}`;
 }
@@ -749,6 +756,7 @@ const ACT = {
   },
 
   addAsset() { assetSheet(null); },
+  addLoan() { assetSheet(null, { type: 'schulden', name: S.assets.some((a) => a.type === 'schulden') ? '' : 'Immobilienkredit' }); },
   propToggle(el) { ui.withProp = el.dataset.v === '1'; render(); },
   editAsset(el) { assetSheet(S.assets.find((a) => a.id === el.dataset.id)); },
   saveAsset() {
