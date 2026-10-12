@@ -4,16 +4,23 @@
 
 const KEY = 'finanzapp.v1';
 
+// [id, Icon, Name, Diagrammfarbe]
 const CATS = [
-  ['lebensmittel', '🛒', 'Lebensmittel'], ['essen', '🍔', 'Essen & Trinken'], ['ausgehen', '🍸', 'Ausgehen'], ['shopping', '🛍️', 'Shopping'],
-  ['mobilitaet', '⛽', 'Auto & Tanken'], ['freizeit', '🎮', 'Freizeit'], ['sport', '🏋️', 'Sport'], ['gesundheit', '💊', 'Gesundheit'],
-  ['geschenke', '🎁', 'Geschenke'], ['reisen', '✈️', 'Reisen'], ['haushalt', '🏠', 'Haushalt'], ['technik', '📱', 'Technik'],
-  ['abos', '🔁', 'Abos & Apps'], ['partner', '❤️', 'Dates & Partner'], ['bildung', '📚', 'Bildung'], ['sonstiges', '✨', 'Sonstiges'],
+  ['lebensmittel', '🛒', 'Lebensmittel', '#22c55e'], ['essen', '🍔', 'Essen & Trinken', '#f97316'], ['ausgehen', '🍸', 'Ausgehen', '#a855f7'], ['shopping', '🛍️', 'Shopping', '#ec4899'],
+  ['mobilitaet', '⛽', 'Auto & Tanken', '#3b82f6'], ['freizeit', '🎮', 'Freizeit', '#06b6d4'], ['sport', '🏋️', 'Sport', '#84cc16'], ['gesundheit', '💊', 'Gesundheit', '#14b8a6'],
+  ['geschenke', '🎁', 'Geschenke', '#f43f5e'], ['reisen', '✈️', 'Reisen', '#0ea5e9'], ['haushalt', '🏠', 'Haushalt', '#eab308'], ['technik', '📱', 'Technik', '#6366f1'],
+  ['abos', '🔁', 'Abos & Apps', '#8b5cf6'], ['partner', '❤️', 'Dates & Partner', '#ff4d6d'], ['bildung', '📚', 'Bildung', '#10b981'], ['sonstiges', '✨', 'Sonstiges', '#94a3b8'],
 ];
 const FIXCATS = [
-  ['wohnen', '🏠', 'Wohnen'], ['versicherung', '🛡️', 'Versicherungen'], ['handy', '📶', 'Handy & Internet'], ['abos', '🔁', 'Abos & Streaming'],
-  ['auto', '🚗', 'Auto'], ['kredit', '💳', 'Kredite & Raten'], ['sparen', '🐷', 'Sparpläne & Vorsorge'], ['sport', '🏋️', 'Sport & Fitness'],
-  ['beruf', '💼', 'Beruf & Büro'], ['sonstiges', '✨', 'Sonstiges'],
+  ['wohnen', '🏠', 'Wohnen', '#f97316'], ['immobilie', '🏢', 'Immobilie (vermietet)', '#fb7185'], ['versicherung', '🛡️', 'Versicherungen', '#a855f7'], ['handy', '📶', 'Handy & Internet', '#06b6d4'],
+  ['abos', '🔁', 'Abos & Streaming', '#8b5cf6'], ['auto', '🚗', 'Auto', '#3b82f6'], ['kredit', '💳', 'Kredite & Raten', '#ef4444'], ['sparen', '🐷', 'Sparpläne & Vorsorge', '#22c55e'],
+  ['sport', '🏋️', 'Sport & Fitness', '#84cc16'], ['beruf', '💼', 'Beruf & Büro', '#eab308'], ['sonstiges', '✨', 'Sonstiges', '#94a3b8'],
+];
+const ASSET_TYPES = [
+  ['konto', '🏦', 'Sparkonten & Tagesgeld', '#3b82f6'], ['depot', '📈', 'Aktien & ETFs', '#22c55e'], ['versicherung', '🛡️', 'Versicherungen & Rente', '#a855f7'],
+  ['gold', '🥇', 'Gold & Edelmetalle', '#eab308'], ['krypto', '🪙', 'Krypto', '#f97316'], ['bauspar', '🏗️', 'Bausparen', '#14b8a6'],
+  ['immobilie', '🏢', 'Immobilien', '#fb7185'], ['bar', '💶', 'Girokonto & Bargeld', '#94a3b8'], ['sonstiges', '✨', 'Sonstiges', '#ec4899'],
+  ['schulden', '📉', 'Kredite & Schulden', '#ef4444'],
 ];
 const INTERVALS = [[1, 'monatlich'], [3, 'vierteljährlich'], [6, 'halbjährlich'], [12, 'jährlich']];
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -26,6 +33,8 @@ function defaultState() {
     incomes: [],
     expenses: [],
     fixed: [],
+    recIncomes: [],
+    assets: [],
     settings: { taxPct: null, saveGoal: '', varBudget: '', startDay: 1 },
   };
 }
@@ -95,16 +104,19 @@ function fixedActive(f, start) {
 function monthly(f) { return num(f.amount) / (f.interval || 1); }
 
 function calc(start) {
-  const inc = S.incomes.filter((i) => inPeriod(i.date, start)).reduce((a, i) => a + num(i.amount), 0);
+  const oneOff = S.incomes.filter((i) => inPeriod(i.date, start)).reduce((a, i) => a + num(i.amount), 0);
+  const rent = S.recIncomes.filter((f) => fixedActive(f, start)).reduce((a, f) => a + monthly(f), 0);
+  const inc = oneOff + rent;
+  const propCost = S.fixed.filter((f) => f.cat === 'immobilie' && fixedActive(f, start)).reduce((a, f) => a + monthly(f), 0);
   const exps = S.expenses.filter((e) => inPeriod(e.date, start));
   const vari = exps.reduce((a, e) => a + num(e.amount), 0);
   const fix = S.fixed.filter((f) => fixedActive(f, start)).reduce((a, f) => a + monthly(f), 0);
-  const tax = inc * (num(S.settings.taxPct) / 100);
+  const tax = oneOff * (num(S.settings.taxPct) / 100);
   const saveGoal = num(S.settings.saveGoal);
   const rest = inc - tax - fix - vari;           // was am Ende übrig bleibt (= gespart)
   const free = rest - saveGoal;                  // frei verfügbar nach Sparziel
   const budget = num(S.settings.varBudget) || Math.max(0, inc - tax - fix - saveGoal);
-  return { start, inc, vari, fix, tax, saveGoal, rest, free, budget, exps, rate: inc ? rest / inc : 0 };
+  return { start, inc, oneOff, rent, propCost, vari, fix, tax, saveGoal, rest, free, budget, exps, rate: inc ? rest / inc : 0 };
 }
 function hasData(start) {
   return S.incomes.some((i) => inPeriod(i.date, start)) || S.expenses.some((e) => inPeriod(e.date, start));
@@ -126,7 +138,8 @@ function verdict(c) {
   if (c.rate >= 0) return { em: '😐', t: 'Knapp – da geht mehr', cls: '', s: `Nur ${pct(c.rate)} übrig geblieben.` };
   return { em: '😬', t: 'Autsch', cls: 'bad', s: `${eur0(-c.rest)} mehr ausgegeben als reinkam.` };
 }
-function catInfo(id, fix) { return (fix ? FIXCATS : CATS).find((c) => c[0] === id) || ['sonstiges', '✨', 'Sonstiges']; }
+function catInfo(id, fix) { return (fix ? FIXCATS : CATS).find((c) => c[0] === id) || ['sonstiges', '✨', 'Sonstiges', '#94a3b8']; }
+function assetType(id) { return ASSET_TYPES.find((t) => t[0] === id) || ASSET_TYPES[8]; }
 function catTotals(exps) {
   const m = {};
   for (const e of exps) m[e.cat] = (m[e.cat] || 0) + num(e.amount);
@@ -135,7 +148,7 @@ function catTotals(exps) {
 
 /* ---------- UI-Zustand ---------- */
 
-const ui = { view: 'uebersicht', period: curPeriod(), expCat: 'alle' };
+const ui = { view: 'uebersicht', period: curPeriod(), expCat: 'alle', withProp: false };
 let sheetCtx = null;
 
 function render() {
@@ -157,7 +170,7 @@ function periodNav() {
 VIEWS.uebersicht = () => {
   const c = calc(ui.period);
   const isCur = dkey(ui.period) === dkey(curPeriod());
-  const fresh = !S.incomes.length && !S.fixed.length && !S.expenses.length;
+  const fresh = !S.incomes.length && !S.fixed.length && !S.expenses.length && !S.assets.length && !S.recIncomes.length;
   const gear = `<button class="gear" data-a="settings" aria-label="Einstellungen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`;
   let html = `<div class="row spread"><h1>Finanzen</h1>${gear}</div>`;
 
@@ -209,11 +222,18 @@ VIEWS.uebersicht = () => {
 
   const cats = catTotals(c.exps);
   if (cats.length) {
-    html += `<h2>Wofür dein Geld weg ist</h2><div class="card">${hbars(cats.slice(0, 8).map((x) => ({ label: catInfo(x.id)[1] + ' ' + catInfo(x.id)[2], v: x.v })))}</div>`;
+    html += `<h2>Wofür dein Geld weg ist</h2><div class="card">${donut(cats.slice(0, 8).map((x) => ({ label: catInfo(x.id)[1] + ' ' + catInfo(x.id)[2], v: x.v, color: catInfo(x.id)[3] })), eur0(c.vari), 'ausgegeben')}</div>`;
   }
   const last = c.exps.slice().sort(byDateDesc).slice(0, 5);
   if (last.length) {
     html += `<div class="row spread"><h2>Letzte Ausgaben</h2><button class="link" data-a="go" data-v="ausgaben">Alle</button></div><div class="list">${last.map(expRow).join('')}</div>`;
+  }
+
+  if (S.assets.length && isCur) {
+    const nw = netWorth();
+    html += `<h2>Dein Vermögen</h2><button class="card row" style="width:100%;text-align:left;gap:14px" data-a="go" data-v="vermoegen">
+      <div style="width:84px;flex:none">${donut(ASSET_TYPES.filter((t) => t[0] !== 'schulden').map((t) => ({ label: t[2], color: t[3], v: S.assets.filter((a) => a.type === t[0]).reduce((s2, a) => s2 + (assetValue(a) || 0), 0) })), '', '', { legend: false })}</div>
+      <div class="grow"><div class="sub small">Nettovermögen</div><div class="big num" style="font-size:26px">${eur0(nw.net)}</div><span class="link">Details ›</span></div></button>`;
   }
 
   // Fazit Vormonat
@@ -243,18 +263,18 @@ function todayStats(c) {
 
 function waterfall(c) {
   const rows = [['Einnahmen', c.inc, 'in']];
-  if (c.tax) rows.push(['Steuer', c.tax, 'out']);
-  rows.push(['Fixkosten', c.fix, 'out']);
-  if (c.saveGoal) rows.push(['Sparziel', c.saveGoal, 'out']);
-  rows.push(['Variabel', c.vari, 'out']);
+  if (c.tax) rows.push(['Steuer', c.tax, 'out', '#a855f7']);
+  rows.push(['Fixkosten', c.fix, 'out', '#f97316']);
+  if (c.saveGoal) rows.push(['Sparziel', c.saveGoal, 'out', '#14b8a6']);
+  rows.push(['Variabel', c.vari, 'out', '#3b82f6']);
   const outs = rows.slice(1).reduce((a, r) => a + r[1], 0);
   const base = Math.max(c.inc, outs, 1);
   let level = c.inc, html = '<div class="wf">';
-  rows.forEach(([label, v, kind], i) => {
+  rows.forEach(([label, v, kind, col], i) => {
     let left, w;
     if (kind === 'in') { left = 0; w = v; }
     else { const from = Math.max(0, level - v); left = from; w = Math.max(0, level) - from; level -= v; }
-    html += `<div class="wf-r"><span>${kind === 'out' ? '− ' : ''}${label}</span><span class="wf-t"><span class="wf-f ${kind}" style="left:${100 * left / base}%;width:${Math.max(w ? 1.5 : 0, 100 * w / base)}%;animation-delay:${i * 90}ms"></span></span><b>${eur0(v)}</b></div>`;
+    html += `<div class="wf-r"><span>${kind === 'out' ? '− ' : ''}${label}</span><span class="wf-t"><span class="wf-f ${kind}" style="left:${100 * left / base}%;width:${Math.max(w ? 1.5 : 0, 100 * w / base)}%;animation-delay:${i * 90}ms${col ? ';background:' + col : ''}"></span></span><b>${eur0(v)}</b></div>`;
   });
   const f = c.free;
   html += `<div class="wf-r sum"><span>= Frei</span><span class="wf-t"><span class="wf-f rest ${f < 0 ? 'neg' : ''}" style="left:0;width:${Math.min(100, 100 * Math.abs(f) / base)}%;animation-delay:${rows.length * 90}ms"></span></span><b class="${f < 0 ? 'neg' : 'pos'}">${eur0(f)}</b></div>`;
@@ -321,7 +341,7 @@ VIEWS.fixkosten = () => {
     <div class="card hero" style="margin-top:12px"><div class="sub">Gehen jeden Monat automatisch ab</div>
       <div class="hero-num">${eur(sum)}</div>
       <div class="sub">${eur0(sum * 12)} pro Jahr${avg ? ` · ${pct(sum / avg)} deines Ø-Einkommens` : ''}</div></div>
-    ${active.length ? `<h2>Aufteilung</h2><div class="card">${hbars(FIXCATS.map((fc) => ({ label: fc[1] + ' ' + fc[2], v: active.filter((f) => f.cat === fc[0]).reduce((a, f) => a + monthly(f), 0) })).filter((x) => x.v).sort((a, b) => b.v - a.v))}</div>` : ''}
+    ${active.length ? `<h2>Aufteilung</h2><div class="card">${donut(FIXCATS.map((fc) => ({ label: fc[1] + ' ' + fc[2], color: fc[3], v: active.filter((f) => f.cat === fc[0]).reduce((a, f) => a + monthly(f), 0) })).sort((a, b) => b.v - a.v), eur0(sum), 'pro Monat')}</div>` : ''}
     ${groups.length ? groups.map((g) => `<h2>${g.fc[1]} ${g.fc[2]}</h2><div class="list">${g.items.map((f) => {
       const on = fixedActive(f, cur);
       return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editFixed" data-id="${f.id}">
@@ -363,11 +383,29 @@ VIEWS.einnahmen = () => {
   const sorted = S.incomes.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   const groups = {};
   for (const i of sorted) { const k = dkey(periodOf(parseD(i.date))); (groups[k] = groups[k] || []).push(i); }
+  const curC = calc(cur);
+  const recHtml = S.recIncomes.length ? `<div class="list">${S.recIncomes.map((f) => {
+    const on = fixedActive(f, cur);
+    return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editRec" data-id="${f.id}"><span class="ic" style="filter:none;background:#fb718522">🏢</span>
+      <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>
+      <button class="toggle ${on ? 'on' : ''}" data-a="toggleRec" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
+  }).join('')}</div>` : '<p class="note" style="margin:0">Mieteinnahmen o. Ä. hier einmal anlegen – sie zählen dann jeden Monat automatisch zu deinen Einnahmen.</p>';
+  const prop = curC.rent || curC.propCost ? `<h2>🏢 Immobilien-Bilanz pro Monat</h2><div class="card">
+      ${hbars([{ label: 'Miete', v: curC.rent, color: '#22c55e' }, { label: 'Kosten', v: curC.propCost, color: '#fb7185' }])}
+      <div style="height:6px"></div>
+      <div class="kv"><span>Mieteinnahmen</span><b class="pos">+${eur(curC.rent)}</b></div>
+      <div class="kv"><span>Kosten (Fixkosten „Immobilie“)</span><b>−${eur(curC.propCost)}</b></div>
+      <div class="kv" style="font-weight:700"><span>= ${curC.rent >= curC.propCost ? 'Überschuss' : 'Unterdeckung'}</span><b class="${curC.rent >= curC.propCost ? 'pos' : 'neg'}">${eur(curC.rent - curC.propCost)}</b></div>
+      <p class="note" style="margin:8px 0 0">Kosten wie Kreditrate, Hausgeld, Grundsteuer oder Rücklage trägst du unter Fixkosten mit der Kategorie „Immobilie (vermietet)“ ein.</p></div>` : '';
   return `<div class="row spread"><h1>Einnahmen</h1><button class="btn sm primary" style="margin-top:16px" data-a="addIncome">+ Neu</button></div>
-    <div class="stats" style="margin-top:12px"><div class="stat"><b class="num">${eur0(avgIncome(3))}</b><span>Ø 3 Monate</span></div>
+    ${curC.inc ? `<div class="card" style="margin-top:12px">${donut([{ label: 'Provision & Co.', v: curC.oneOff, color: '#22c55e' }, { label: 'Feste Einnahmen (Miete)', v: curC.rent, color: '#fb7185' }], eur0(curC.inc), 'diesen Monat')}</div>` : ''}
+    <div class="row spread"><h2>Feste Einnahmen</h2><button class="link" data-a="addRec">+ Mieteinnahme</button></div>${recHtml}
+    ${prop}
+    <h2>Provision & Co.</h2>
+    <div class="stats"><div class="stat"><b class="num">${eur0(avgIncome(3))}</b><span>Ø 3 Monate</span></div>
       <div class="stat"><b class="num">${eur0(avgIncome(6))}</b><span>Ø 6 Monate</span></div>
       <div class="stat"><b class="num">${eur0(avgIncome(12))}</b><span>Ø 12 Monate</span></div></div>
-    <h2>Letzte 12 Monate</h2><div class="card">${nonzero.length ? barChart(series, avg) : '<p class="sub" style="margin:0">Sobald du Einnahmen einträgst, siehst du hier, wie stark deine Provision schwankt.</p>'}
+    <h2>Letzte 12 Monate</h2><div class="card">${nonzero.length ? barChart(series, avg, '#22c55e') : '<p class="sub" style="margin:0">Sobald du Einnahmen einträgst, siehst du hier, wie stark deine Provision schwankt.</p>'}
       ${nonzero.length > 1 ? `<div class="stats two" style="margin-top:12px"><div class="stat"><b class="num">${eur0(Math.min(...nonzero.map((s) => s.v)))}</b><span>schwächster Monat</span></div><div class="stat"><b class="num">${eur0(Math.max(...nonzero.map((s) => s.v)))}</b><span>stärkster Monat</span></div></div>` : ''}</div>
     ${Object.keys(groups).length ? Object.entries(groups).map(([k, items]) => `<div class="daygrp"><div class="daygrp-h"><span>${periodLabel(parseD(k))}</span><b>${eur(items.reduce((a, i) => a + num(i.amount), 0))}</b></div>
       <div class="list">${items.map((i) => `<button class="item" data-a="editIncome" data-id="${i.id}"><span class="ic">💶</span><div class="grow"><div class="name">${esc(i.label || 'Provision')}</div><div class="meta">${niceDate(i.date)}</div></div><span class="amt pos">+${eur(num(i.amount))}</span></button>`).join('')}</div></div>`).join('') :
@@ -394,6 +432,95 @@ function incomeSheet(i) {
   if (isNew) setTimeout(() => { const a = $('#fAmount'); if (a) a.focus(); }, 250);
 }
 
+/* ---------- Vermögen ---------- */
+
+function assetValue(a, upTo) {
+  const h = (a.history || []).filter((x) => !upTo || x.date <= upTo);
+  return h.length ? num(h[h.length - 1].value) : null;
+}
+function signed(a, v) { return a.type === 'schulden' ? -Math.abs(v) : v; }
+function netWorth(upTo) {
+  let assets = 0, debts = 0;
+  for (const a of S.assets) { const v = assetValue(a, upTo); if (v === null) continue; if (a.type === 'schulden') debts += Math.abs(v); else assets += v; }
+  return { assets, debts, net: assets - debts };
+}
+function netHistory() {
+  const dates = [...new Set(S.assets.flatMap((a) => (a.history || []).map((h) => h.date)))].sort();
+  return dates.map((d) => ({ label: parseD(d).getDate() + '.' + (parseD(d).getMonth() + 1) + '.', date: d, v: netWorth(d).net }));
+}
+
+VIEWS.vermoegen = () => {
+  const nw = netWorth();
+  const hist = netHistory();
+  const monthAgo = dkey(addDays(new Date(), -30));
+  const before = hist.filter((h) => h.date <= monthAgo).pop();
+  const delta = before ? nw.net - before.v : null;
+  const propVal = S.assets.filter((a) => a.type === 'immobilie').reduce((s2, a) => s2 + (assetValue(a) || 0), 0);
+  const showProp = ui.withProp || !propVal;
+  const byType = ASSET_TYPES.filter((t) => t[0] !== 'schulden' && (showProp || t[0] !== 'immobilie')).map((t) => ({ label: t[1] + ' ' + t[2], color: t[3], v: S.assets.filter((a) => a.type === t[0]).reduce((s, a) => s + (assetValue(a) || 0), 0) }));
+  const groups = ASSET_TYPES.map((t) => ({ t, items: S.assets.filter((a) => a.type === t[0]) })).filter((g) => g.items.length);
+  return `<div class="row spread"><h1>Vermögen</h1><button class="btn sm primary" style="margin-top:16px" data-a="addAsset">+ Topf</button></div>
+    <div class="card hero" style="margin-top:12px"><div class="sub">Nettovermögen</div>
+      <div class="hero-num ${nw.net < 0 ? 'neg' : ''}">${S.assets.length ? eur(nw.net) : '–'}</div>
+      <div class="sub">${S.assets.length ? `${eur0(nw.assets)} Vermögen${nw.debts ? ' · ' + eur0(nw.debts) + ' Schulden' : ''}` : 'Leg deinen ersten Topf an – z. B. dein Tagesgeldkonto.'}
+      ${delta !== null ? `<br><span class="${delta >= 0 ? 'pos' : 'neg'}" style="font-weight:700">${delta >= 0 ? '▲ +' : '▼ '}${eur0(delta)}</span> in den letzten 30 Tagen` : ''}</div></div>
+    ${nw.assets ? `<h2>Wo dein Geld liegt</h2>
+      ${propVal ? `<div class="seg"><button class="${showProp ? '' : 'on'}" data-a="propToggle" data-v="0">Ohne Immobilie</button><button class="${showProp ? 'on' : ''}" data-a="propToggle" data-v="1">Alles</button></div>` : ''}
+      <div class="card">${donut(byType, eur0(byType.reduce((s2, x) => s2 + x.v, 0)), showProp ? 'Vermögen' : 'ohne Immobilie')}</div>` : ''}
+    ${propVal ? (() => {
+      const debt = S.assets.filter((a) => a.type === 'schulden').reduce((s2, a) => s2 + Math.abs(assetValue(a) || 0), 0);
+      const eq = propVal - debt, share = Math.max(0, Math.min(1, eq / propVal));
+      return `<h2>🏢 Deine Immobilie</h2><div class="card">
+        <div class="row spread"><span class="sub small">Eigenkapital</span><span class="sub small">${Math.round(share * 100)} % gehören dir</span></div>
+        <div class="big num" style="font-size:30px">${eur0(eq)}</div>
+        <div class="meter"><i style="width:${share * 100}%;background:linear-gradient(90deg,#fb718588,#fb7185)"></i></div>
+        <div class="kv"><span>Marktwert</span><b>${eur(propVal)}</b></div>
+        <div class="kv"><span>Restschuld (Kredite & Schulden)</span><b class="neg">−${eur(debt)}</b></div></div>`;
+    })() : ''}
+    ${hist.length > 1 ? `<h2>Entwicklung</h2><div class="card"><span class="sub small">Nettovermögen</span>${lineChart(hist, '#22c55e')}</div>` : ''}
+    ${groups.length ? groups.map((g) => `<h2>${g.t[1]} ${g.t[2]}</h2><div class="list">${g.items.map((a) => {
+      const h = a.history || [], v = assetValue(a) || 0, prev = h.length > 1 ? num(h[h.length - 2].value) : null;
+      const d = prev === null ? null : v - prev;
+      return `<button class="item" data-a="editAsset" data-id="${a.id}"><span class="ic" style="filter:none;background:${g.t[3]}22">${g.t[1]}</span>
+        <div class="grow"><div class="name">${esc(a.name)}</div><div class="meta">Stand ${h.length ? niceDate(h[h.length - 1].date) : '–'}${d ? ` · <span class="${(d > 0) !== (a.type === 'schulden') ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${eur0(d)}</span>` : ''}</div></div>
+        <span class="amt ${a.type === 'schulden' ? 'neg' : ''}">${a.type === 'schulden' ? '−' : ''}${eur(Math.abs(v))}</span></button>`;
+    }).join('')}</div>`).join('') :
+      `<div class="empty">Noch keine Töpfe.<br>Leg für jedes Konto, Depot, jede Versicherung, deinen Goldsparplan und deine Immobilie einen Topf an. Kredite trägst du als „Kredite & Schulden“ ein.</div>`}
+    <p class="note" style="margin-top:16px">Tipp: Aktualisiere die Werte einmal im Monat, z. B. am Zahltag. Jeder neue Stand wird gespeichert – daraus entsteht die Entwicklungskurve. Die Immobilie trägst du mit ihrem Marktwert ein und den Restkredit als Schulden.</p>
+    <div style="height:70px"></div>`;
+};
+
+function assetSheet(a) {
+  const isNew = !a;
+  a = a || { name: '', type: 'konto', history: [] };
+  const v = assetValue(a);
+  sheetCtx = { kind: 'asset', id: isNew ? null : a.id };
+  openSheet(`<div class="sh-head"><h3>${isNew ? 'Neuer Topf' : esc(a.name)}</h3>${isNew ? '' : '<p class="sub" style="margin:4px 0 0">Neuen Kontostand eintragen – der alte bleibt im Verlauf.</p>'}</div>
+    <div class="sh-body stack">
+      <input class="amount-in" id="fAmount" inputmode="decimal" placeholder="0,00 €" value="${v !== null ? esc(String(Math.abs(v)).replace('.', ',')) : ''}" autocomplete="off">
+      <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(a.name)}" placeholder="z. B. Tagesgeld ING, ETF-Depot, Goldsparplan"></label>
+      <label class="field"><span>Art</span><select class="input" id="fType">${ASSET_TYPES.map(([id, ic, n]) => `<option value="${id}" ${id === a.type ? 'selected' : ''}>${ic} ${n}</option>`).join('')}</select></label>
+      ${(a.history || []).length > 1 ? `<h2 style="margin:12px 0 0">Verlauf</h2>${lineChart(a.history.map((h) => ({ label: parseD(h.date).getDate() + '.' + (parseD(h.date).getMonth() + 1) + '.', v: num(h.value) })), assetType(a.type)[3])}
+        <div class="list">${a.history.slice(-6).reverse().map((h) => `<div class="item"><span class="grow">${niceDate(h.date)}</span><b class="num">${eur(num(h.value))}</b></div>`).join('')}</div>` : ''}
+    </div>
+    <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delAsset">Löschen</button>'}<button class="btn primary grow" data-a="saveAsset">Speichern</button></div>`);
+  setTimeout(() => { const el = $('#fAmount'); if (el) { el.focus(); el.select(); } }, 250);
+}
+
+function recSheet(f) {
+  const isNew = !f;
+  f = f || { name: 'Miete', amount: '', interval: 1 };
+  sheetCtx = { kind: 'rec', id: isNew ? null : f.id };
+  openSheet(`<div class="sh-head"><h3>${isNew ? 'Feste Einnahme' : 'Feste Einnahme bearbeiten'}</h3></div>
+    <div class="sh-body stack">
+      <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(f.name)}" placeholder="z. B. Miete Wohnung"></label>
+      <div class="grid2"><label class="field"><span>Betrag (€)</span><input class="input" id="fAmount" inputmode="decimal" value="${f.amount ? esc(String(f.amount).replace('.', ',')) : ''}" placeholder="0,00"></label>
+        <label class="field"><span>Wie oft?</span><select class="input" id="fInterval">${INTERVALS.map(([v, l]) => `<option value="${v}" ${v === (f.interval || 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <p class="note" style="margin:0">Auf feste Einnahmen wird keine Steuerrücklage gerechnet – Mieteinnahmen werden nach Abzug der Kosten versteuert. Wenn du dafür etwas zurücklegen willst, leg dir einen Fixkosten-Posten „Steuer Miete“ an.</p>
+    </div>
+    <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delRec">Löschen</button>'}<button class="btn primary grow" data-a="saveRec">Speichern</button></div>`);
+}
+
 /* ---------- Statistik ---------- */
 
 VIEWS.statistik = () => {
@@ -414,7 +541,7 @@ VIEWS.statistik = () => {
 
   return `<h1>Statistik</h1>
     <h2>Monate im Vergleich</h2><div class="card">${withInc.length || cs.some((x) => x.vari) ? stackChart(cs) : '<p class="sub" style="margin:0">Hier siehst du bald jeden Monat als Balken: was reinkam, was wohin ging und was übrig blieb.</p>'}
-      <div class="legend"><span><i style="background:#2e2e2e"></i>Steuer</span><span><i style="background:#5a5a5a"></i>Fixkosten</span><span><i style="background:#9a9a9a"></i>Variabel</span><span><i style="background:var(--good)"></i>Übrig</span><span><i style="background:var(--danger)"></i>Minus</span></div></div>
+      <div class="legend"><span><i style="background:#a855f7"></i>Steuer</span><span><i style="background:#f97316"></i>Fixkosten</span><span><i style="background:#3b82f6"></i>Variabel</span><span><i style="background:#22c55e"></i>Übrig</span><span><i style="background:var(--danger)"></i>Minus</span></div></div>
     <h2>Jahr ${year}</h2><div class="card">
       <div class="kv"><span>Einnahmen</span><b>${eur(Y.inc)}</b></div>
       ${Y.tax ? `<div class="kv"><span>Steuerrücklage</span><b>−${eur(Y.tax)}</b></div>` : ''}
@@ -424,9 +551,10 @@ VIEWS.statistik = () => {
       ${Y.inc ? `<div class="kv"><span>Sparquote</span><b>${pct(ySaved / Y.inc)}</b></div>` : ''}</div>
     ${periodNav()}
     ${(() => { const v = verdict(c); return v ? `<div class="card verdict ${v.cls}"><span class="em">${v.em}</span><div><h3>${v.t}</h3><div class="sub">${v.s}</div></div></div>` : ''; })()}
+    ${cats.length ? `<h2>Ausgaben nach Kategorie</h2><div class="card">${donut(cats.map((x) => ({ label: catInfo(x.id)[1] + ' ' + catInfo(x.id)[2], v: x.v, color: catInfo(x.id)[3] })), eur0(c.vari), periodLabel(ui.period, 2))}</div>` : ''}
     <h2>Kategorien vs. Vormonat</h2><div class="card">${cats.length ? '<div class="hbars">' + cats.map((x, i) => {
       const prev = prevCats[x.id] || 0, d = x.v - prev, max = cats[0].v;
-      return `<div class="hb"><span class="hb-l">${catInfo(x.id)[1]} ${catInfo(x.id)[2]}</span><span class="hb-t"><span class="hb-f" style="width:${Math.max(4, 100 * x.v / max)}%;animation-delay:${i * 60}ms"></span></span>
+      return `<div class="hb"><span class="hb-l">${catInfo(x.id)[1]} ${catInfo(x.id)[2]}</span><span class="hb-t"><span class="hb-f" style="width:${Math.max(4, 100 * x.v / max)}%;animation-delay:${i * 60}ms;background:linear-gradient(90deg, ${catInfo(x.id)[3]}88, ${catInfo(x.id)[3]})"></span></span>
         <b class="num">${eur0(x.v)}<br><span class="small ${d > 0 ? 'neg' : d < 0 ? 'pos' : 'muted'}" style="font-weight:600">${prev ? (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + eur0(Math.abs(d)) : 'neu'}</span></b></div>`;
     }).join('') + '</div>' : '<p class="sub" style="margin:0">Keine Ausgaben in diesem Monat.</p>'}</div>
     ${top.length ? `<h2>Größte Ausgaben</h2><div class="list">${top.map(expRow).join('')}</div>` : ''}
@@ -439,10 +567,47 @@ function hbars(items) {
   if (!items.length) return '<p class="sub small" style="margin:0">Noch keine Daten.</p>';
   const max = Math.max(...items.map((i) => i.v));
   return '<div class="hbars">' + items.map((it, i) => `<div class="hb"><span class="hb-l">${esc(it.label)}</span>
-    <span class="hb-t"><span class="hb-f" style="width:${Math.max(4, 100 * it.v / max)}%;animation-delay:${i * 60}ms"></span></span>
+    <span class="hb-t"><span class="hb-f" style="width:${Math.max(4, 100 * it.v / max)}%;animation-delay:${i * 60}ms${it.color ? `;background:linear-gradient(90deg, ${it.color}88, ${it.color})` : ''}"></span></span>
     <b class="num">${eur0(it.v)}</b></div>`).join('') + '</div>';
 }
-function barChart(items, avg) {
+
+// Ringdiagramm mit Legende
+function donut(items, top, bottom, opts = {}) {
+  items = items.filter((i) => i.v > 0);
+  const total = items.reduce((a, i) => a + i.v, 0);
+  if (!total) return '<p class="sub" style="margin:0">Noch keine Daten.</p>';
+  const r = 70, c = 2 * Math.PI * r, gap = items.length > 1 ? 2.5 : 0;
+  let off = 0, arcs = '';
+  items.forEach((it, i) => {
+    const len = Math.max(0.5, c * it.v / total - gap);
+    arcs += `<circle cx="100" cy="100" r="${r}" class="dn-arc" stroke="${it.color}" stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-off}" style="animation-delay:${i * 70}ms"/>`;
+    off += c * it.v / total;
+  });
+  const legend = opts.legend === false ? '' : `<div class="dn-leg">${items.map((it) => `<div class="dn-row"><i style="background:${it.color}"></i><span class="grow">${esc(it.label)}</span><b class="num">${eur0(it.v)}</b><span class="muted num small" style="width:40px;text-align:right">${Math.round(100 * it.v / total)} %</span></div>`).join('')}</div>`;
+  return `<div class="dn"><svg viewBox="0 0 200 200" class="dn-svg"><circle cx="100" cy="100" r="${r}" class="dn-bg"/><g transform="rotate(-90 100 100)">${arcs}</g>
+    <text x="100" y="96" text-anchor="middle" class="dn-top">${esc(top)}</text><text x="100" y="118" text-anchor="middle" class="dn-bot">${esc(bottom)}</text></svg></div>${legend}`;
+}
+
+// Verlaufskurve
+function lineChart(pts, color = '#22c55e') {
+  const W = 320, H = 130, P = 8, B = 18;
+  const vs = pts.map((p) => p.v);
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const pad = (hi - lo) * 0.15; lo -= pad; hi += pad;
+  const x = (i) => P + (pts.length === 1 ? (W - 2 * P) / 2 : i * (W - 2 * P) / (pts.length - 1));
+  const y = (v) => P + (H - P - B) * (1 - (v - lo) / (hi - lo));
+  const line = pts.map((p, i) => x(i).toFixed(1) + ',' + y(p.v).toFixed(1)).join(' ');
+  const id = 'g' + Math.random().toString(36).slice(2, 7);
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <line class="gl" x1="0" x2="${W}" y1="${H - B}" y2="${H - B}"/>
+    <polygon points="${x(0)},${H - B} ${line} ${x(pts.length - 1)},${H - B}" fill="url(#${id})"/>
+    <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 6px ${color}66)"/>
+    ${pts.length <= 24 ? pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.5" fill="#000" stroke="${color}" stroke-width="2"/>`).join('') : ''}
+    <text x="${P}" y="${H - 4}">${esc(pts[0].label)}</text><text x="${W - P}" y="${H - 4}" text-anchor="end">${esc(pts[pts.length - 1].label)}</text></svg>`;
+}
+function barChart(items, avg, color) {
   const W = 320, H = 140, B = 18, T = 16, gap = 5;
   const max = Math.max(1, avg || 0, ...items.map((i) => i.v));
   const bw = (W - gap * (items.length - 1)) / items.length;
@@ -450,7 +615,7 @@ function barChart(items, avg) {
   const best = Math.max(...items.map((i) => i.v));
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${items.map((it, i) => {
     const h = it.v ? Math.max(3, H - B - y(it.v)) : 3, x = i * (bw + gap);
-    return `<rect class="br ${it.v ? '' : 'z'} ${it.v && it.v === best ? 'top' : ''}" style="animation-delay:${i * 40}ms" x="${x}" y="${H - B - h}" width="${bw}" height="${h}" rx="4"/>
+    return `<rect class="br ${it.v ? '' : 'z'} ${it.v && it.v === best ? 'top' : ''}" style="animation-delay:${i * 40}ms${color && it.v ? `;fill:${color};opacity:${it.v === best ? 1 : 0.55}` : ''}" x="${x}" y="${H - B - h}" width="${bw}" height="${h}" rx="4"/>
       <text x="${x + bw / 2}" y="${H - 4}" text-anchor="middle">${esc(it.label)}</text>`;
   }).join('')}${avg ? `<line class="avg" x1="0" x2="${W}" y1="${y(avg)}" y2="${y(avg)}"/><text class="avgt" x="${W}" y="${y(avg) - 4}" text-anchor="end">Ø ${eur0(avg)}</text>` : ''}</svg>`;
 }
@@ -583,6 +748,49 @@ const ACT = {
     confirmSheet('Einnahme löschen?', 'Der Eintrag wird endgültig entfernt.', 'Löschen', () => { S.incomes = S.incomes.filter((i) => i.id !== id); save(); render(); });
   },
 
+  addAsset() { assetSheet(null); },
+  propToggle(el) { ui.withProp = el.dataset.v === '1'; render(); },
+  editAsset(el) { assetSheet(S.assets.find((a) => a.id === el.dataset.id)); },
+  saveAsset() {
+    const name = $('#fName').value.trim(), raw = $('#fAmount').value.trim();
+    if (!name) { toast('Bitte eine Bezeichnung eingeben'); return; }
+    if (raw === '') { toast('Bitte den aktuellen Wert eingeben'); return; }
+    const value = round2(Math.abs(num(raw))), type = $('#fType').value, t = today();
+    let a = sheetCtx.id && S.assets.find((x) => x.id === sheetCtx.id);
+    if (!a) { a = { id: uid(), name, type, history: [] }; S.assets.push(a); }
+    const old = assetValue(a);
+    Object.assign(a, { name, type });
+    a.history = (a.history || []).filter((h) => h.date !== t);
+    a.history.push({ date: t, value });
+    a.history.sort((x, y) => (x.date < y.date ? -1 : 1));
+    save(); closeSheet(); render();
+    toast(old === null ? name + ' angelegt' : value === old ? 'Stand bestätigt' : `${name}: ${value > old ? '+' : ''}${eur(value - old)}`);
+  },
+  delAsset() {
+    const id = sheetCtx.id;
+    confirmSheet('Topf löschen?', 'Der Topf und sein ganzer Verlauf werden entfernt.', 'Löschen', () => { S.assets = S.assets.filter((a) => a.id !== id); save(); render(); });
+  },
+  addRec() { recSheet(null); },
+  editRec(el) { recSheet(S.recIncomes.find((f) => f.id === el.dataset.id)); },
+  saveRec() {
+    const name = $('#fName').value.trim(), amount = round2(num($('#fAmount').value));
+    if (!name) { toast('Bitte eine Bezeichnung eingeben'); return; }
+    if (amount <= 0) { toast('Bitte einen Betrag eingeben'); return; }
+    const data = { name, amount, interval: +$('#fInterval').value };
+    if (sheetCtx.id) Object.assign(S.recIncomes.find((f) => f.id === sheetCtx.id), data);
+    else S.recIncomes.push({ id: uid(), start: dkey(curPeriod()), end: '', ...data });
+    save(); closeSheet(); render(); toast('Feste Einnahme gespeichert');
+  },
+  toggleRec(el) {
+    const f = S.recIncomes.find((x) => x.id === el.dataset.id), cur = dkey(curPeriod());
+    if (fixedActive(f, curPeriod())) { f.end = cur; toast(f.name + ' pausiert ab diesem Monat'); } else { f.end = ''; toast(f.name + ' wieder aktiv'); }
+    save(); render();
+  },
+  delRec() {
+    const id = sheetCtx.id;
+    confirmSheet('Feste Einnahme löschen?', 'Sie verschwindet auch aus vergangenen Monaten. Wenn sie nur ab jetzt wegfällt, nutz lieber den Schalter.', 'Löschen', () => { S.recIncomes = S.recIncomes.filter((f) => f.id !== id); save(); render(); });
+  },
+
   saveSettings() {
     const tax = $('#sTax').value.trim();
     S.settings.taxPct = tax === '' ? (S.settings.taxPct === null ? null : 0) : Math.min(80, Math.max(0, num(tax)));
@@ -602,6 +810,8 @@ const ACT = {
       f.text().then((t) => {
         const d = JSON.parse(t);
         if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.incomes) || !Array.isArray(d.fixed)) throw new Error('format');
+        d.recIncomes = Array.isArray(d.recIncomes) ? d.recIncomes : [];
+        d.assets = Array.isArray(d.assets) ? d.assets : [];
         S = Object.assign(defaultState(), d);
         S.settings = Object.assign(defaultState().settings, S.settings);
         save(); closeSheet(); ui.period = curPeriod(); render(); toast('Backup geladen');
@@ -633,7 +843,7 @@ document.addEventListener('click', (ev) => {
 });
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter' && ev.target.id === 'fAmount' && sheetCtx) {
-    const map = { expense: 'saveExpense', income: 'saveIncome', fixed: 'saveFixed' };
+    const map = { expense: 'saveExpense', income: 'saveIncome', fixed: 'saveFixed', asset: 'saveAsset', rec: 'saveRec' };
     if (sheetCtx.kind === 'expense' && !sheetCtx.cat) { ev.target.blur(); return; }
     if (map[sheetCtx.kind]) { ev.preventDefault(); ACT[map[sheetCtx.kind]](); }
   }
