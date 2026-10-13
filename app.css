@@ -298,3 +298,8 @@ textarea.input { height: auto; min-height: 76px; padding: 10px 12px; resize: ver
 .dn-row b { font-variant-numeric: tabular-nums; }
 #nav button { font-size: 10.5px; }
 #nav svg { width: 24px; height: 24px; }
+
+/* Antippbare Einträge kenntlich machen */
+button.item[data-a]::after { content: "›"; color: #555; font-size: 22px; margin-left: 2px; line-height: 1; }
+.wf-r.tap { cursor: pointer; border-radius: 8px; }
+.wf-r.tap:active { background: var(--card-2); }

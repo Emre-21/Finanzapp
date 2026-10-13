@@ -209,7 +209,15 @@ VIEWS.uebersicht = () => {
 
   // Wasserfall
   if (c.inc || c.vari || c.fix) {
-    html += `<h2>So setzt sich dein Monat zusammen</h2><div class="card">${waterfall(c)}</div>`;
+    html += `<h2>So setzt sich dein Monat zusammen</h2><div class="card">${waterfall(c)}<p class="note" style="margin:10px 0 0">Tipp: Zeile antippen, um sie zu öffnen.</p></div>`;
+  }
+  {
+    const mine = S.incomes.filter((i) => inPeriod(i.date, ui.period)).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const recs = S.recIncomes.filter((f) => fixedActive(f, ui.period));
+    if (mine.length || recs.length) {
+      html += `<div class="row spread"><h2>Einnahmen ${isCur ? 'diesen Monat' : 'in diesem Monat'}</h2><button class="link" data-a="addIncome">+ Einnahme</button></div>
+        <div class="list">${mine.map(incRow).join('')}${recs.map((f) => `<button class="item" data-a="editRec" data-id="${f.id}"><span class="ic">🏢</span><div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">feste Einnahme · antippen zum Ändern</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>`).join('')}</div>`;
+    }
   }
 
   // Variable Ausgaben vs. Budget
@@ -262,23 +270,27 @@ function todayStats(c) {
 }
 
 function waterfall(c) {
-  const rows = [['Einnahmen', c.inc, 'in']];
-  if (c.tax) rows.push(['Steuer', c.tax, 'out', '#a855f7']);
-  rows.push(['Fixkosten', c.fix, 'out', '#f97316']);
-  if (c.saveGoal) rows.push(['Sparziel', c.saveGoal, 'out', '#14b8a6']);
-  rows.push(['Variabel', c.vari, 'out', '#3b82f6']);
+  const rows = [['Einnahmen', c.inc, 'in', '', 'einnahmen']];
+  if (c.tax) rows.push(['Steuer', c.tax, 'out', '#a855f7', 'settings']);
+  rows.push(['Fixkosten', c.fix, 'out', '#f97316', 'fixkosten']);
+  if (c.saveGoal) rows.push(['Sparziel', c.saveGoal, 'out', '#14b8a6', 'settings']);
+  rows.push(['Variabel', c.vari, 'out', '#3b82f6', 'ausgaben']);
   const outs = rows.slice(1).reduce((a, r) => a + r[1], 0);
   const base = Math.max(c.inc, outs, 1);
   let level = c.inc, html = '<div class="wf">';
-  rows.forEach(([label, v, kind, col], i) => {
+  rows.forEach(([label, v, kind, col, target], i) => {
     let left, w;
     if (kind === 'in') { left = 0; w = v; }
     else { const from = Math.max(0, level - v); left = from; w = Math.max(0, level) - from; level -= v; }
-    html += `<div class="wf-r"><span>${kind === 'out' ? '− ' : ''}${label}</span><span class="wf-t"><span class="wf-f ${kind}" style="left:${100 * left / base}%;width:${Math.max(w ? 1.5 : 0, 100 * w / base)}%;animation-delay:${i * 90}ms${col ? ';background:' + col : ''}"></span></span><b>${eur0(v)}</b></div>`;
+    html += `<div class="wf-r tap" ${target === 'settings' ? 'data-a="settings"' : `data-a="go" data-v="${target}"`}><span>${kind === 'out' ? '− ' : ''}${label}</span><span class="wf-t"><span class="wf-f ${kind}" style="left:${100 * left / base}%;width:${Math.max(w ? 1.5 : 0, 100 * w / base)}%;animation-delay:${i * 90}ms${col ? ';background:' + col : ''}"></span></span><b>${eur0(v)}</b></div>`;
   });
   const f = c.free;
   html += `<div class="wf-r sum"><span>= Frei</span><span class="wf-t"><span class="wf-f rest ${f < 0 ? 'neg' : ''}" style="left:0;width:${Math.min(100, 100 * Math.abs(f) / base)}%;animation-delay:${rows.length * 90}ms"></span></span><b class="${f < 0 ? 'neg' : 'pos'}">${eur0(f)}</b></div>`;
   return html + '</div>';
+}
+
+function incRow(i) {
+  return `<button class="item" data-a="editIncome" data-id="${i.id}"><span class="ic">💶</span><div class="grow"><div class="name">${esc(i.label || 'Provision')}</div><div class="meta">${niceDate(i.date)} · antippen zum Ändern</div></div><span class="amt pos">+${eur(num(i.amount))}</span></button>`;
 }
 
 /* ---------- Ausgaben ---------- */
@@ -399,6 +411,9 @@ VIEWS.einnahmen = () => {
       <p class="note" style="margin:8px 0 0">Kosten wie Kreditrate, Hausgeld, Grundsteuer oder Rücklage trägst du unter Fixkosten mit der Kategorie „Immobilie (vermietet)“ ein.</p></div>` : '';
   return `<div class="row spread"><h1>Einnahmen</h1><button class="btn sm primary" style="margin-top:16px" data-a="addIncome">+ Neu</button></div>
     ${curC.inc ? `<div class="card" style="margin-top:12px">${donut([{ label: 'Provision & Co.', v: curC.oneOff, color: '#22c55e' }, { label: 'Feste Einnahmen (Miete)', v: curC.rent, color: '#fb7185' }], eur0(curC.inc), 'diesen Monat')}</div>` : ''}
+    <div class="row spread"><h2>Diesen Monat eingetragen</h2><button class="link" data-a="addIncome">+ Einnahme</button></div>
+    ${(() => { const mine = S.incomes.filter((i) => inPeriod(i.date, cur)).sort((a, b) => (a.date < b.date ? 1 : -1));
+      return mine.length ? `<div class="list">${mine.map(incRow).join('')}</div>` : '<p class="note" style="margin:0">Noch keine Provision für diesen Monat eingetragen.</p>'; })()}
     <div class="row spread"><h2>Feste Einnahmen</h2><button class="link" data-a="addRec">+ Mieteinnahme</button></div>${recHtml}
     ${prop}
     <h2>Provision & Co.</h2>
@@ -408,7 +423,7 @@ VIEWS.einnahmen = () => {
     <h2>Letzte 12 Monate</h2><div class="card">${nonzero.length ? barChart(series, avg, '#22c55e') : '<p class="sub" style="margin:0">Sobald du Einnahmen einträgst, siehst du hier, wie stark deine Provision schwankt.</p>'}
       ${nonzero.length > 1 ? `<div class="stats two" style="margin-top:12px"><div class="stat"><b class="num">${eur0(Math.min(...nonzero.map((s) => s.v)))}</b><span>schwächster Monat</span></div><div class="stat"><b class="num">${eur0(Math.max(...nonzero.map((s) => s.v)))}</b><span>stärkster Monat</span></div></div>` : ''}</div>
     ${Object.keys(groups).length ? Object.entries(groups).map(([k, items]) => `<div class="daygrp"><div class="daygrp-h"><span>${periodLabel(parseD(k))}</span><b>${eur(items.reduce((a, i) => a + num(i.amount), 0))}</b></div>
-      <div class="list">${items.map((i) => `<button class="item" data-a="editIncome" data-id="${i.id}"><span class="ic">💶</span><div class="grow"><div class="name">${esc(i.label || 'Provision')}</div><div class="meta">${niceDate(i.date)}</div></div><span class="amt pos">+${eur(num(i.amount))}</span></button>`).join('')}</div></div>`).join('') :
+      <div class="list">${items.map(incRow).join('')}</div></div>`).join('') :
       '<div class="empty">Noch keine Einnahmen eingetragen.</div>'}
     <p class="note" style="margin-top:16px">Tipp: Plane mit deinem <b>Ø-Einkommen</b> oder sogar mit dem schwächsten Monat – nicht mit dem besten. So bringen dich schwache Provisionsmonate nicht ins Schwitzen.</p>
     <div style="height:70px"></div>`;
@@ -744,9 +759,11 @@ const ACT = {
     const amount = round2(num($('#fAmount').value));
     if (amount <= 0) { toast('Bitte einen Betrag eingeben'); return; }
     const data = { amount, label: $('#fLabel').value.trim() || 'Provision', date: $('#fDate').value || today() };
-    if (sheetCtx.id) Object.assign(S.incomes.find((i) => i.id === sheetCtx.id), data);
+    const editing = !!sheetCtx.id;
+    if (editing) Object.assign(S.incomes.find((i) => i.id === sheetCtx.id), data);
     else S.incomes.push({ id: uid(), ...data });
     save(); closeSheet(); render();
+    if (editing) { toast('Einnahme geändert: ' + eur(amount)); return; }
     const avg = avgIncome(6);
     toast(avg ? `+${eur(amount)} · ${amount >= avg ? '▲ ' + eur0(amount - avg) + ' über' : '▼ ' + eur0(avg - amount) + ' unter'} deinem Ø` : `+${eur(amount)} eingetragen`);
   },
