@@ -3,6 +3,7 @@
 /* ---------- Speicher ---------- */
 
 const KEY = 'finanzapp.v1';
+const APP_VERSION = 6;
 
 // [id, Icon, Name, Diagrammfarbe]
 const CATS = [
@@ -29,7 +30,7 @@ const WD = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'
 
 function defaultState() {
   return {
-    version: 1,
+    version: 2,
     incomes: [],
     expenses: [],
     fixed: [],
@@ -38,12 +39,21 @@ function defaultState() {
     settings: { taxPct: null, saveGoal: '', varBudget: '', startDay: 1 },
   };
 }
+// Version 2: Fixkosten und feste Einnahmen gelten standardmäßig für alle Monate.
+// Bisher wurde automatisch der Monat der Eingabe als Start gesetzt – das wird aufgehoben.
+// Bewusst gewählte frühere Startmonate (vor September 2026) bleiben erhalten.
+function migrate(s) {
+  if ((s.version || 1) >= 2) return;
+  for (const f of (s.fixed || []).concat(s.recIncomes || [])) if (f.start && f.start >= '2026-09-01') f.start = '';
+  s.version = 2;
+}
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = Object.assign(defaultState(), JSON.parse(raw));
       s.settings = Object.assign(defaultState().settings, s.settings);
+      migrate(s);
       return s;
     }
   } catch (e) { /* leerer Start */ }
@@ -109,9 +119,9 @@ function rangeText(f) {
 }
 function rangeFields(f) {
   const to = f.end ? monthOfKey(dkey(shiftPeriod(parseD(f.end), -1))) : '';
-  return `<div class="grid2"><label class="field"><span>Gilt seit (Monat)</span><input class="input" id="fFrom" type="month" value="${monthOfKey(f.start)}"></label>
+  return `<div class="grid2"><label class="field"><span>Gilt seit (leer = immer)</span><input class="input" id="fFrom" type="month" value="${monthOfKey(f.start)}"></label>
     <label class="field"><span>Gilt bis (optional)</span><input class="input" id="fTo" type="month" value="${to}"></label></div>
-    <p class="note" style="margin:-2px 0 0">Für rückwirkende Einträge einfach einen früheren Monat wählen, z. B. Januar. „Gilt bis“ leer lassen, wenn es weiterläuft.</p>`;
+    <p class="note" style="margin:-2px 0 0">Beide Felder leer = gilt für alle Monate, auch rückwirkend. Nur ausfüllen, wenn ein Posten erst später dazukam oder weggefallen ist.</p>`;
 }
 function readRange() {
   const start = keyOfMonth($('#fFrom').value);
@@ -393,7 +403,7 @@ VIEWS.fixkosten = () => {
 
 function fixedSheet(f) {
   const isNew = !f;
-  f = f || { name: '', amount: '', interval: 1, cat: 'versicherung', day: '', start: dkey(curPeriod()), end: '' };
+  f = f || { name: '', amount: '', interval: 1, cat: 'versicherung', day: '', start: '', end: '' };
   sheetCtx = { kind: 'fixed', id: isNew ? null : f.id };
   openSheet(`<div class="sh-head"><h3>${isNew ? 'Fixkosten hinzufügen' : 'Fixkosten bearbeiten'}</h3></div>
     <div class="sh-body stack">
@@ -557,7 +567,7 @@ function assetSheet(a, preset) {
 
 function recSheet(f) {
   const isNew = !f;
-  f = f || { name: 'Miete', amount: '', interval: 1, start: dkey(curPeriod()), end: '' };
+  f = f || { name: 'Miete', amount: '', interval: 1, start: '', end: '' };
   sheetCtx = { kind: 'rec', id: isNew ? null : f.id };
   openSheet(`<div class="sh-head"><h3>${isNew ? 'Feste Einnahme' : 'Feste Einnahme bearbeiten'}</h3></div>
     <div class="sh-body stack">
@@ -710,6 +720,7 @@ function settingsSheet() {
       <div class="row"><button class="btn grow" data-a="export">Backup sichern</button><button class="btn grow" data-a="import">Backup laden</button></div>
       <button class="btn block" data-a="csv">Ausgaben als CSV (für Excel)</button>
       <button class="btn danger block" data-a="wipe">Alle Daten löschen</button>
+      <p class="note" style="text-align:center;margin:8px 0 0">App-Version ${APP_VERSION}</p>
     </div>
     <div class="sh-foot row"><button class="btn grow" data-a="closeSheet">Schließen</button><button class="btn primary grow" data-a="saveSettings">Speichern</button></div>`);
   sheetCtx = { kind: 'settings' };
@@ -933,4 +944,12 @@ function toast(msg) {
 
 render();
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  // Neue Version übernommen -> einmal neu laden, damit das Update sofort sichtbar ist
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
+}
+// Migration beim ersten Start nach dem Update speichern
+save();
