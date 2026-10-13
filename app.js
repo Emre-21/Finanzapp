@@ -97,6 +97,30 @@ function curPeriod() { return periodOf(new Date()); }
 
 /* ---------- Berechnung ---------- */
 
+// Monatsfelder (<input type="month">) <-> interne Zeitraum-Schlüssel
+function monthOfKey(k) { if (!k) return ''; const d = parseD(k); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function keyOfMonth(m) { if (!m) return ''; const [y, mo] = m.split('-').map(Number); return y && mo ? dkey(new Date(y, mo - 1, sd())) : ''; }
+function monthName(k) { const d = parseD(k); return MON_S[d.getMonth()] + ' ' + d.getFullYear(); }
+function rangeText(f) {
+  const parts = [];
+  if (f.start) parts.push('seit ' + monthName(f.start));
+  if (f.end) parts.push('bis ' + monthName(dkey(shiftPeriod(parseD(f.end), -1))));
+  return parts.join(' · ');
+}
+function rangeFields(f) {
+  const to = f.end ? monthOfKey(dkey(shiftPeriod(parseD(f.end), -1))) : '';
+  return `<div class="grid2"><label class="field"><span>Gilt seit (Monat)</span><input class="input" id="fFrom" type="month" value="${monthOfKey(f.start)}"></label>
+    <label class="field"><span>Gilt bis (optional)</span><input class="input" id="fTo" type="month" value="${to}"></label></div>
+    <p class="note" style="margin:-2px 0 0">Für rückwirkende Einträge einfach einen früheren Monat wählen, z. B. Januar. „Gilt bis“ leer lassen, wenn es weiterläuft.</p>`;
+}
+function readRange() {
+  const start = keyOfMonth($('#fFrom').value);
+  const toKey = keyOfMonth($('#fTo').value);
+  const end = toKey ? dkey(shiftPeriod(parseD(toKey), 1)) : '';
+  if (start && end && end <= start) return null;
+  return { start, end };
+}
+
 function fixedActive(f, start) {
   const k = dkey(start);
   return (!f.start || f.start < dkey(periodEnd(start))) && (!f.end || f.end > k);
@@ -357,18 +381,19 @@ VIEWS.fixkosten = () => {
     ${groups.length ? groups.map((g) => `<h2>${g.fc[1]} ${g.fc[2]}</h2><div class="list">${g.items.map((f) => {
       const on = fixedActive(f, cur);
       return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editFixed" data-id="${f.id}">
-          <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${(f.interval || 1) > 1 ? ' · ' + eur(monthly(f)) + '/Monat' : ''}${f.day ? ' · am ' + f.day + '.' : ''}</div></div>
+          <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${(f.interval || 1) > 1 ? ' · ' + eur(monthly(f)) + '/Monat' : ''}${f.day ? ' · am ' + f.day + '.' : ''}${rangeText(f) ? '<br>' + rangeText(f) : ''}</div></div>
           <span class="amt">${eur(monthly(f))}</span></button>
         <button class="toggle ${on ? 'on' : ''}" data-a="toggleFixed" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
     }).join('')}</div>`).join('') :
       `<div class="empty">Noch keine Fixkosten.<br>Trag alles ein, was regelmäßig abgeht: Handy, Versicherungen, Abos, Auto, Fitnessstudio …</div>`}
-    <p class="note" style="margin-top:16px">Jährliche oder vierteljährliche Kosten werden anteilig pro Monat gerechnet – so legst du automatisch dafür zurück. Mit dem Schalter pausierst du einen Posten ab diesem Monat; frühere Monate bleiben unverändert.</p>
+    ${S.fixed.length ? '<button class="btn block" style="margin-top:16px" data-a="bulkStart">📅 Alle Fixkosten ab einem Monat gelten lassen</button>' : ''}
+    <p class="note" style="margin-top:16px">Jährliche oder vierteljährliche Kosten werden anteilig pro Monat gerechnet – so legst du automatisch dafür zurück. Mit dem Schalter pausierst du einen Posten ab diesem Monat; frühere Monate bleiben unverändert. Ab wann ein Posten gilt, stellst du beim Antippen unter „Gilt seit“ ein.</p>
     <div style="height:70px"></div>`;
 };
 
 function fixedSheet(f) {
   const isNew = !f;
-  f = f || { name: '', amount: '', interval: 1, cat: 'versicherung', day: '' };
+  f = f || { name: '', amount: '', interval: 1, cat: 'versicherung', day: '', start: dkey(curPeriod()), end: '' };
   sheetCtx = { kind: 'fixed', id: isNew ? null : f.id };
   openSheet(`<div class="sh-head"><h3>${isNew ? 'Fixkosten hinzufügen' : 'Fixkosten bearbeiten'}</h3></div>
     <div class="sh-body stack">
@@ -377,6 +402,7 @@ function fixedSheet(f) {
         <label class="field"><span>Wie oft?</span><select class="input" id="fInterval">${INTERVALS.map(([v, l]) => `<option value="${v}" ${v === (f.interval || 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
       <div class="grid2"><label class="field"><span>Kategorie</span><select class="input" id="fCat">${FIXCATS.map(([id, ic, n]) => `<option value="${id}" ${id === f.cat ? 'selected' : ''}>${ic} ${n}</option>`).join('')}</select></label>
         <label class="field"><span>Abbuchung am (Tag)</span><input class="input" id="fDay" inputmode="numeric" value="${esc(f.day || '')}" placeholder="optional"></label></div>
+      ${rangeFields(f)}
     </div>
     <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delFixed">Löschen</button>'}<button class="btn primary grow" data-a="saveFixed">Speichern</button></div>`);
 }
@@ -399,7 +425,7 @@ VIEWS.einnahmen = () => {
   const recHtml = S.recIncomes.length ? `<div class="list">${S.recIncomes.map((f) => {
     const on = fixedActive(f, cur);
     return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editRec" data-id="${f.id}"><span class="ic" style="filter:none;background:#fb718522">🏢</span>
-      <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>
+      <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${rangeText(f) ? ' · ' + rangeText(f) : ''}</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>
       <button class="toggle ${on ? 'on' : ''}" data-a="toggleRec" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
   }).join('')}</div>` : '<p class="note" style="margin:0">Mieteinnahmen o. Ä. hier einmal anlegen – sie zählen dann jeden Monat automatisch zu deinen Einnahmen.</p>';
   const prop = curC.rent || curC.propCost ? `<h2>🏢 Immobilien-Bilanz pro Monat</h2><div class="card">
@@ -531,13 +557,14 @@ function assetSheet(a, preset) {
 
 function recSheet(f) {
   const isNew = !f;
-  f = f || { name: 'Miete', amount: '', interval: 1 };
+  f = f || { name: 'Miete', amount: '', interval: 1, start: dkey(curPeriod()), end: '' };
   sheetCtx = { kind: 'rec', id: isNew ? null : f.id };
   openSheet(`<div class="sh-head"><h3>${isNew ? 'Feste Einnahme' : 'Feste Einnahme bearbeiten'}</h3></div>
     <div class="sh-body stack">
       <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(f.name)}" placeholder="z. B. Miete Wohnung"></label>
       <div class="grid2"><label class="field"><span>Betrag (€)</span><input class="input" id="fAmount" inputmode="decimal" value="${f.amount ? esc(String(f.amount).replace('.', ',')) : ''}" placeholder="0,00"></label>
         <label class="field"><span>Wie oft?</span><select class="input" id="fInterval">${INTERVALS.map(([v, l]) => `<option value="${v}" ${v === (f.interval || 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      ${rangeFields(f)}
       <p class="note" style="margin:0">Auf feste Einnahmen wird keine Steuerrücklage gerechnet – Mieteinnahmen werden nach Abzug der Kosten versteuert. Wenn du dafür etwas zurücklegen willst, leg dir einen Fixkosten-Posten „Steuer Miete“ an.</p>
     </div>
     <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delRec">Löschen</button>'}<button class="btn primary grow" data-a="saveRec">Speichern</button></div>`);
@@ -736,9 +763,11 @@ const ACT = {
     if (!name) { toast('Bitte eine Bezeichnung eingeben'); return; }
     if (amount <= 0) { toast('Bitte einen Betrag eingeben'); return; }
     const day = parseInt($('#fDay').value, 10);
-    const data = { name, amount, interval: +$('#fInterval').value, cat: $('#fCat').value, day: day >= 1 && day <= 31 ? day : '' };
+    const range = readRange();
+    if (!range) { toast('„Gilt bis“ muss nach „Gilt seit“ liegen'); return; }
+    const data = { name, amount, interval: +$('#fInterval').value, cat: $('#fCat').value, day: day >= 1 && day <= 31 ? day : '', ...range };
     if (sheetCtx.id) Object.assign(S.fixed.find((f) => f.id === sheetCtx.id), data);
-    else S.fixed.push({ id: uid(), start: dkey(curPeriod()), end: '', ...data });
+    else S.fixed.push({ id: uid(), ...data });
     save(); closeSheet(); render(); toast('Fixkosten gespeichert');
   },
   toggleFixed(el) {
@@ -750,6 +779,22 @@ const ACT = {
   delFixed() {
     const id = sheetCtx.id;
     confirmSheet('Fixkosten löschen?', 'Der Posten verschwindet auch aus allen vergangenen Monaten. Wenn du ihn nur ab jetzt nicht mehr zahlst, nutz lieber den Schalter in der Liste.', 'Löschen', () => { S.fixed = S.fixed.filter((f) => f.id !== id); save(); render(); });
+  },
+
+  bulkStart() {
+    const y = new Date().getFullYear();
+    openSheet(`<div class="sh-head"><h3>Alle Fixkosten ab …</h3></div><div class="sh-body stack">
+      <label class="field"><span>Gilt seit (Monat)</span><input class="input" id="fFrom" type="month" value="${y}-01"></label>
+      <p class="note" style="margin:0">Alle ${S.fixed.length} Fixkosten-Posten zählen dann ab diesem Monat – auch rückwirkend. Ein „Gilt bis“ bleibt erhalten. Einzelne Posten, die sich geändert haben, passt du danach per Antippen an.</p></div>
+      <div class="sh-foot row"><button class="btn grow" data-a="closeSheet">Abbrechen</button><button class="btn primary grow" data-a="bulkStartYes">Übernehmen</button></div>`);
+    sheetCtx = { kind: 'bulk' };
+  },
+  bulkStartYes() {
+    const k = keyOfMonth($('#fFrom').value);
+    if (!k) { toast('Bitte einen Monat wählen'); return; }
+    let n = 0;
+    for (const f of S.fixed) { if (f.end && f.end <= k) continue; f.start = k; n++; }
+    save(); closeSheet(); render(); toast(`${n} Posten gelten jetzt ab ${monthName(k)}`);
   },
 
   addIncome() { incomeSheet(null); },
@@ -801,9 +846,11 @@ const ACT = {
     const name = $('#fName').value.trim(), amount = round2(num($('#fAmount').value));
     if (!name) { toast('Bitte eine Bezeichnung eingeben'); return; }
     if (amount <= 0) { toast('Bitte einen Betrag eingeben'); return; }
-    const data = { name, amount, interval: +$('#fInterval').value };
+    const range = readRange();
+    if (!range) { toast('„Gilt bis“ muss nach „Gilt seit“ liegen'); return; }
+    const data = { name, amount, interval: +$('#fInterval').value, ...range };
     if (sheetCtx.id) Object.assign(S.recIncomes.find((f) => f.id === sheetCtx.id), data);
-    else S.recIncomes.push({ id: uid(), start: dkey(curPeriod()), end: '', ...data });
+    else S.recIncomes.push({ id: uid(), ...data });
     save(); closeSheet(); render(); toast('Feste Einnahme gespeichert');
   },
   toggleRec(el) {
