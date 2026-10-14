@@ -3,7 +3,7 @@
 /* ---------- Speicher ---------- */
 
 const KEY = 'finanzapp.v1';
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 
 // [id, Icon, Name, Diagrammfarbe]
 const CATS = [
