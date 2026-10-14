@@ -3,14 +3,15 @@
 /* ---------- Speicher ---------- */
 
 const KEY = 'finanzapp.v1';
-const APP_VERSION = 6;
+const APP_VERSION = 7;
 
 // [id, Icon, Name, Diagrammfarbe]
 const CATS = [
   ['lebensmittel', '🛒', 'Lebensmittel', '#22c55e'], ['essen', '🍔', 'Essen & Trinken', '#f97316'], ['ausgehen', '🍸', 'Ausgehen', '#a855f7'], ['shopping', '🛍️', 'Shopping', '#ec4899'],
   ['mobilitaet', '⛽', 'Auto & Tanken', '#3b82f6'], ['freizeit', '🎮', 'Freizeit', '#06b6d4'], ['sport', '🏋️', 'Sport', '#84cc16'], ['gesundheit', '💊', 'Gesundheit', '#14b8a6'],
   ['geschenke', '🎁', 'Geschenke', '#f43f5e'], ['reisen', '✈️', 'Reisen', '#0ea5e9'], ['haushalt', '🏠', 'Haushalt', '#eab308'], ['technik', '📱', 'Technik', '#6366f1'],
-  ['abos', '🔁', 'Abos & Apps', '#8b5cf6'], ['partner', '❤️', 'Dates & Partner', '#ff4d6d'], ['bildung', '📚', 'Bildung', '#10b981'], ['sonstiges', '✨', 'Sonstiges', '#94a3b8'],
+  ['abos', '🔁', 'Abos & Apps', '#8b5cf6'], ['partner', '❤️', 'Dates & Partner', '#ff4d6d'], ['bildung', '📚', 'Bildung', '#10b981'],
+  ['steuern', '🧾', 'Steuern', '#c084fc'], ['sonstiges', '✨', 'Sonstiges', '#94a3b8'],
 ];
 const FIXCATS = [
   ['wohnen', '🏠', 'Wohnen', '#f97316'], ['immobilie', '🏢', 'Immobilie (vermietet)', '#fb7185'], ['versicherung', '🛡️', 'Versicherungen', '#a855f7'], ['handy', '📶', 'Handy & Internet', '#06b6d4'],
