@@ -3,7 +3,7 @@
 /* ---------- Speicher ---------- */
 
 const KEY = 'finanzapp.v1';
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 
 // [id, Icon, Name, Diagrammfarbe]
 const CATS = [
@@ -664,7 +664,7 @@ function lineChart(pts, color = '#22c55e') {
     <line class="gl" x1="0" x2="${W}" y1="${H - B}" y2="${H - B}"/>
     <polygon points="${x(0)},${H - B} ${line} ${x(pts.length - 1)},${H - B}" fill="url(#${id})"/>
     <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 6px ${color}66)"/>
-    ${pts.length <= 24 ? pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.5" fill="#000" stroke="${color}" stroke-width="2"/>`).join('') : ''}
+    ${pts.length <= 24 ? pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.5" fill="#fff" stroke="${color}" stroke-width="2"/>`).join('') : ''}
     <text x="${P}" y="${H - 4}">${esc(pts[0].label)}</text><text x="${W - P}" y="${H - 4}" text-anchor="end">${esc(pts[pts.length - 1].label)}</text></svg>`;
 }
 function barChart(items, avg, color) {

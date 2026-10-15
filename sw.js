@@ -1,5 +1,5 @@
 // Offline-Cache: erst Netzwerk (damit Updates sofort ankommen), sonst Cache.
-const CACHE = 'finanzen-v8';
+const CACHE = 'finanzen-v9';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
