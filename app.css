@@ -351,3 +351,31 @@ button.item[data-a]::after { color: #c0c4d0; }
 .verdict.good { background: #f0fdf4; border-color: #bbf7d0; }
 .verdict.bad { background: #fef2f2; border-color: #fecaca; }
 .wf-r.tap:active { background: var(--card-2); }
+
+/* ---------- Einfach-Modus ---------- */
+#nav button { font-size: 11px; }
+.seg.mode { margin: 0 0 4px; }
+.seg.mode button { height: 40px; font-size: 15px; }
+.seg.mode button.on.in { color: var(--good); }
+.amount-in.in { color: var(--good); }
+.chips.quick { padding-bottom: 2px; }
+.chips.quick .chip { background: #eef2ff; border-color: #e0e7ff; color: #3730a3; font-weight: 600; }
+.chips.labels { justify-content: center; flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; }
+.chips.labels .chip { height: 42px; padding: 0 18px; font-size: 15px; }
+details.more { margin-top: 14px; }
+details.more > summary { list-style: none; cursor: pointer; color: var(--brand); font-weight: 600; font-size: 14px; padding: 6px 0; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: "+ "; }
+details.more[open] > summary::before { content: "− "; }
+details.more[open] > summary { margin-bottom: 8px; }
+details.more.box { background: var(--card-2); border-radius: 16px; padding: 4px 12px 10px; }
+.scope { display: grid; gap: 6px; background: var(--card-2); border-radius: 14px; padding: 10px 12px; font-size: 14px; }
+.scope label { display: flex; align-items: center; gap: 8px; }
+.scope input { accent-color: var(--brand); width: 18px; height: 18px; }
+.card.prov { margin-top: 12px; border-color: #c7d2fe; background: linear-gradient(180deg, #eef2ff, #fff); }
+.card.auto { border-color: #bbf7d0; background: linear-gradient(180deg, #f0fdf4, #fff); }
+#toast { display: flex; align-items: center; gap: 12px; }
+#toast[hidden] { display: none; }
+.toast-undo { background: rgba(255,255,255,.18); color: #fff; font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: 9px; white-space: nowrap; }
+#toast { left: 0; right: 0; margin: 0 auto; transform: none; width: fit-content; max-width: calc(100% - 32px); }
+#toast span { flex: 1; }

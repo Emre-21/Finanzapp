@@ -1,16 +1,13 @@
 # Finanzen – persönlicher Finanzplaner
 
-Installierbare Web-App (PWA) ohne Build-Schritt und ohne Abhängigkeiten.
+Installierbare Web-App (PWA) ohne Build-Schritt und ohne Abhängigkeiten. Alle Daten bleiben im Browser des Geräts (`localStorage`).
 
-- **Übersicht:** frei verfügbares Geld, Betrag pro Tag, Wasserfall Einnahmen → Steuerrücklage → Fixkosten → Sparziel → variable Ausgaben, Hochrechnung bis Monatsende, Fazit des Vormonats
-- **Ausgaben:** Schnelleingabe über den +-Button mit 16 Kategorien, Liste nach Tagen, Filter
-- **Fixkosten:** monatlich/vierteljährlich/halbjährlich/jährlich (anteilig pro Monat), pausieren ab aktuellem Monat
-- **Einnahmen:** Provision & Co., Ø 3/6/12 Monate, Schwankungs-Diagramm
-- **Vermögen:** Töpfe für Konten, Depot, Versicherungen, Gold, Krypto, Immobilien und Kredite mit Verlauf, Kreisdiagramm (mit/ohne Immobilie), Eigenkapital der Immobilie, Entwicklung des Nettovermögens
-- **Feste Einnahmen:** z. B. Mieteinnahmen, monatlich automatisch, mit Immobilien-Bilanz (Miete vs. Kosten)
-- **Statistik:** Monate im Vergleich, Jahresbilanz, Kategorien vs. Vormonat, größte Ausgaben
-- **Einstellungen:** Steuerrücklage in %, Sparziel, Budget, Monatsbeginn (1. oder 15.), Backup/Import, CSV-Export
-
-Alle Daten bleiben im Browser des Geräts (`localStorage`), nichts wird hochgeladen.
+- **Übersicht:** frei verfügbares Geld, Betrag pro Tag, Monatsrechnung (Einnahmen → Steuer → Fixkosten → Sparziel → Variabel), Provisions-Abfrage ab dem 15., Monatsfazit, Vergleich der letzten Monate
+- **Schnelleingabe (+):** Ausgabe oder Einnahme; Betrag tippen, Kategorie antippen = gespeichert, Schnellknöpfe für häufige Ausgaben, „Rückgängig“
+- **Verlauf:** alle Einnahmen und Ausgaben eines Monats in einer Liste, mit Filter
+- **Planung:** Fixkosten und feste Einnahmen (z. B. Miete); Betragsänderungen gelten automatisch ab dem aktuellen Monat, Immobilien-Bilanz, Provision im Schnitt
+- **Vermögen:** Töpfe mit Automatik – der Monatsrest fließt in einen gewählten Topf, verknüpfte Sparpläne und Kredittilgungen werden jeden Monat gebucht; ein eingetragener Kontostand gilt als Abgleich
+- **Statistik:** Jahresbilanz, Kategorien vs. Vormonat, größte Ausgaben
+- **Einstellungen:** Steuerrücklage, Sparziel, Budget, Monatsbeginn, Monatsrest-Topf, Backup/Import, CSV-Export
 
 Lokal starten: `python3 -m http.server 8000` in diesem Ordner, dann http://localhost:8000 öffnen.

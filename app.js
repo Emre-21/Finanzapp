@@ -3,7 +3,7 @@
 /* ---------- Speicher ---------- */
 
 const KEY = 'finanzapp.v1';
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 
 // [id, Icon, Name, Diagrammfarbe]
 const CATS = [
@@ -37,7 +37,7 @@ function defaultState() {
     fixed: [],
     recIncomes: [],
     assets: [],
-    settings: { taxPct: null, saveGoal: '', varBudget: '', startDay: 1 },
+    settings: { taxPct: null, saveGoal: '', varBudget: '', startDay: 1, restTo: '' },
   };
 }
 // Version 2: Fixkosten und feste Einnahmen gelten standardmäßig für alle Monate.
@@ -183,7 +183,7 @@ function catTotals(exps) {
 
 /* ---------- UI-Zustand ---------- */
 
-const ui = { view: 'uebersicht', period: curPeriod(), expCat: 'alle', withProp: false };
+const ui = { view: 'uebersicht', period: curPeriod(), expCat: 'alle', withProp: false, vFilter: 'alle' };
 let sheetCtx = null;
 
 function render() {
@@ -213,12 +213,11 @@ VIEWS.uebersicht = () => {
     return html + `<div class="card hero" style="margin-top:14px"><div class="sub">Willkommen 👋</div>
       <h2 style="margin:6px 0 10px">So startest du</h2>
       <div class="stack">
-        <div class="row"><b class="num">1</b><span class="grow">Leg im Zahnrad oben fest, wie viel Prozent du für <b>Steuern</b> zurücklegst.</span></div>
-        <div class="row"><b class="num">2</b><span class="grow">Trag unter <b>Fixkosten</b> alles ein, was regelmäßig abgeht.</span></div>
-        <div class="row"><b class="num">3</b><span class="grow">Trag unter <b>Einnahmen</b> deine Provision ein, sobald sie da ist.</span></div>
-        <div class="row"><b class="num">4</b><span class="grow">Jede Ausgabe sofort mit dem <b>+</b> unten rechts eintragen – auch den Kaffee.</span></div>
+        <div class="row"><b class="num">1</b><span class="grow">Unter <b>Planung</b> einmal alles eintragen, was regelmäßig abgeht – und die Miete.</span></div>
+        <div class="row"><b class="num">2</b><span class="grow">Unter <b>Vermögen</b> deine Konten & Depots anlegen. Danach rechnet die App selbst weiter.</span></div>
+        <div class="row"><b class="num">3</b><span class="grow">Alles andere über das <b>+</b>: Betrag tippen, Kategorie antippen – fertig.</span></div>
       </div>
-      <div class="row" style="margin-top:16px"><button class="btn primary grow" data-a="settings">Los geht's</button><button class="btn grow" data-a="go" data-v="fixkosten">Fixkosten</button></div></div>`;
+      <div class="row" style="margin-top:16px"><button class="btn primary grow" data-a="go" data-v="planung">Los geht's</button><button class="btn grow" data-a="settings">Einstellungen</button></div></div>`;
   }
 
   html += periodNav();
@@ -231,10 +230,17 @@ VIEWS.uebersicht = () => {
     sub = c.rest >= 0 ? `${eur(c.rest)} behalten (${pct(c.rate)})` : `${eur(-c.rest)} im Minus`;
   }
   const shown = isCur ? c.free : c.rest;
+  const lastProv = S.incomes.filter((i) => (i.label || 'Provision') === 'Provision').sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const askProv = isCur && !c.oneOff && (sd() !== 1 || new Date().getDate() >= 15);
   html += `<div class="card hero"><div class="sub">${freeLabel}</div>
     <div class="hero-num ${shown < 0 ? 'neg' : ''}">${c.inc || c.vari || c.fix ? eur(shown) : '–'}</div>
     <div class="sub">${sub || (c.inc ? '' : 'Noch keine Einnahme in diesem Monat eingetragen')}</div>
-    ${!c.inc ? `<button class="btn primary block" style="margin-top:14px" data-a="addIncome">${isCur ? 'Provision eintragen' : 'Einnahme eintragen'}</button>` : ''}</div>`;
+    ${!c.inc && !askProv ? `<button class="btn primary block" style="margin-top:14px" data-a="addIncome">${isCur ? 'Provision eintragen' : 'Einnahme eintragen'}</button>` : ''}</div>`;
+  if (askProv) {
+    html += `<div class="card prov"><div class="row"><span style="font-size:30px">💶</span><div class="grow"><h3>Provision schon da?</h3>
+      <div class="sub small">${lastProv ? 'Letztes Mal: ' + eur(num(lastProv.amount)) : 'Trag sie ein, sobald sie auf dem Konto ist.'}</div></div></div>
+      <div class="row" style="margin-top:12px">${lastProv ? `<button class="btn primary grow" data-a="quickProvision">✓ ${eur0(num(lastProv.amount))} eintragen</button>` : ''}<button class="btn grow" data-a="addIncome">${lastProv ? 'Anderer Betrag' : 'Eintragen'}</button></div></div>`;
+  }
 
   if (S.settings.taxPct === null) {
     html += `<div class="card" style="margin-top:12px"><h3>Steuerrücklage festlegen</h3>
@@ -251,7 +257,7 @@ VIEWS.uebersicht = () => {
     const recs = S.recIncomes.filter((f) => fixedActive(f, ui.period));
     if (mine.length || recs.length) {
       html += `<div class="row spread"><h2>Einnahmen ${isCur ? 'diesen Monat' : 'in diesem Monat'}</h2><button class="link" data-a="addIncome">+ Einnahme</button></div>
-        <div class="list">${mine.map(incRow).join('')}${recs.map((f) => `<button class="item" data-a="editRec" data-id="${f.id}"><span class="ic">🏢</span><div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">feste Einnahme · antippen zum Ändern</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>`).join('')}</div>`;
+        <div class="list">${mine.map(incRow).join('')}${recs.map((f) => `<button class="item" data-a="editRec" data-id="${f.id}"><span class="ic">🏢</span><div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">feste Einnahme · jeden Monat</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>`).join('')}</div>`;
     }
   }
 
@@ -269,7 +275,7 @@ VIEWS.uebersicht = () => {
   }
   const last = c.exps.slice().sort(byDateDesc).slice(0, 5);
   if (last.length) {
-    html += `<div class="row spread"><h2>Letzte Ausgaben</h2><button class="link" data-a="go" data-v="ausgaben">Alle</button></div><div class="list">${last.map(expRow).join('')}</div>`;
+    html += `<div class="row spread"><h2>Letzte Ausgaben</h2><button class="link" data-a="go" data-v="verlauf">Alle</button></div><div class="list">${last.map(expRow).join('')}</div>`;
   }
 
   if (S.assets.length && isCur) {
@@ -285,6 +291,13 @@ VIEWS.uebersicht = () => {
     if (hasData(prev)) {
       const pc = calc(prev), v = verdict(pc);
       if (v) html += `<h2>Fazit ${periodLabel(prev)}</h2><div class="card verdict ${v.cls}"><span class="em">${v.em}</span><div><h3>${v.t}</h3><div class="sub">${v.s}</div></div></div>`;
+    }
+  }
+  if (isCur) {
+    const cs = []; for (let i = 5; i >= 0; i--) cs.push(calc(shiftPeriod(ui.period, -i)));
+    if (cs.some((x) => x.oneOff || x.vari)) {
+      html += `<div class="row spread"><h2>Die letzten Monate</h2><button class="link" data-a="go" data-v="statistik">Mehr Statistik ›</button></div>
+        <div class="card">${stackChart(cs)}<div class="legend"><span><i style="background:#a855f7"></i>Steuer</span><span><i style="background:#f97316"></i>Fixkosten</span><span><i style="background:#3b82f6"></i>Variabel</span><span><i style="background:#22c55e"></i>Übrig</span></div></div>`;
     }
   }
   return html + '<div style="height:70px"></div>';
@@ -305,11 +318,11 @@ function todayStats(c) {
 }
 
 function waterfall(c) {
-  const rows = [['Einnahmen', c.inc, 'in', '', 'einnahmen']];
+  const rows = [['Einnahmen', c.inc, 'in', '', 'verlauf']];
   if (c.tax) rows.push(['Steuer', c.tax, 'out', '#a855f7', 'settings']);
-  rows.push(['Fixkosten', c.fix, 'out', '#f97316', 'fixkosten']);
+  rows.push(['Fixkosten', c.fix, 'out', '#f97316', 'planung']);
   if (c.saveGoal) rows.push(['Sparziel', c.saveGoal, 'out', '#14b8a6', 'settings']);
-  rows.push(['Variabel', c.vari, 'out', '#3b82f6', 'ausgaben']);
+  rows.push(['Variabel', c.vari, 'out', '#3b82f6', 'verlauf']);
   const outs = rows.slice(1).reduce((a, r) => a + r[1], 0);
   const base = Math.max(c.inc, outs, 1);
   let level = c.inc, html = '<div class="wf">';
@@ -325,10 +338,10 @@ function waterfall(c) {
 }
 
 function incRow(i) {
-  return `<button class="item" data-a="editIncome" data-id="${i.id}"><span class="ic">💶</span><div class="grow"><div class="name">${esc(i.label || 'Provision')}</div><div class="meta">${niceDate(i.date)} · antippen zum Ändern</div></div><span class="amt pos">+${eur(num(i.amount))}</span></button>`;
+  return `<button class="item" data-a="editIncome" data-id="${i.id}"><span class="ic">💶</span><div class="grow"><div class="name">${esc(i.label || 'Provision')}</div><div class="meta">${niceDate(i.date)}</div></div><span class="amt pos">+${eur(num(i.amount))}</span></button>`;
 }
 
-/* ---------- Ausgaben ---------- */
+/* ---------- Eingabe (Ausgabe & Einnahme) ---------- */
 
 const byDateDesc = (a, b) => (a.date === b.date ? (b.t || 0) - (a.t || 0) : a.date < b.date ? 1 : -1);
 function expRow(e) {
@@ -338,157 +351,215 @@ function expRow(e) {
     <span class="amt">−${eur(num(e.amount))}</span></button>`;
 }
 
-VIEWS.ausgaben = () => {
-  const c = calc(ui.period);
-  const used = catTotals(c.exps);
-  if (ui.expCat !== 'alle' && !used.some((u) => u.id === ui.expCat)) ui.expCat = 'alle';
-  const list = c.exps.filter((e) => ui.expCat === 'alle' || e.cat === ui.expCat).sort(byDateDesc);
-  const days = {};
-  for (const e of list) (days[e.date] = days[e.date] || []).push(e);
-  const filteredSum = list.reduce((a, e) => a + num(e.amount), 0);
-  const nDays = Object.keys(days).length;
-  return `<h1>Ausgaben</h1>${periodNav()}
-    <div class="stats"><div class="stat"><b class="num">${eur0(filteredSum)}</b><span>${ui.expCat === 'alle' ? 'gesamt' : catInfo(ui.expCat)[2]}</span></div>
-      <div class="stat"><b class="num">${list.length}</b><span>Einträge</span></div>
-      <div class="stat"><b class="num">${nDays ? eur0(filteredSum / Math.max(1, Math.round((Math.min(Date.now(), periodEnd(ui.period)) - ui.period) / 864e5))) : '–'}</b><span>Ø pro Tag</span></div></div>
-    ${used.length ? `<div class="chips" style="margin-top:14px"><button class="chip ${ui.expCat === 'alle' ? 'on' : ''}" data-a="expCat" data-c="alle">Alle</button>${used.map((u) =>
-      `<button class="chip ${ui.expCat === u.id ? 'on' : ''}" data-a="expCat" data-c="${u.id}">${catInfo(u.id)[1]} ${catInfo(u.id)[2]}</button>`).join('')}</div>` : ''}
-    ${list.length ? Object.entries(days).map(([d, es]) => `<div class="daygrp"><div class="daygrp-h"><span>${niceDate(d)}</span><b>−${eur(es.reduce((a, e) => a + num(e.amount), 0))}</b></div>
-      <div class="list">${es.map(expRow).join('')}</div></div>`).join('') :
-      '<div class="empty">Noch keine Ausgaben in diesem Monat.<br>Tipp unten rechts auf <b>+</b>, um die erste einzutragen.</div>'}
-    <div style="height:80px"></div>`;
-};
+// Häufige Ausgaben der letzten Monate als Ein-Tipp-Knöpfe
+function quickPicks() {
+  const since = dkey(addDays(new Date(), -120));
+  const m = {};
+  for (const e of S.expenses) {
+    if (e.date < since) continue;
+    const k = e.cat + '|' + (e.note || '').toLowerCase() + '|' + num(e.amount);
+    if (!m[k]) m[k] = { cat: e.cat, note: e.note || '', amount: num(e.amount), n: 0, t: 0 };
+    m[k].n++; m[k].t = Math.max(m[k].t, e.t || 0);
+  }
+  return Object.values(m).filter((x) => x.n >= 2).sort((a, b) => b.n - a.n || b.t - a.t).slice(0, 6);
+}
 
-function expenseSheet(e) {
-  const isNew = !e;
-  e = e || { amount: '', cat: '', note: '', date: today() };
-  sheetCtx = { kind: 'expense', id: isNew ? null : e.id, cat: e.cat };
-  openSheet(`<div class="sh-head"><h3>${isNew ? 'Ausgabe eintragen' : 'Ausgabe bearbeiten'}</h3></div>
+const INC_LABELS = ['Provision', 'Bonus', 'Erstattung', 'Sonstiges'];
+
+function entrySheet(mode, item, keepAmount) {
+  const isNew = !item;
+  if (mode === 'in') item = item || { amount: '', label: 'Provision', date: today() };
+  else item = item || { amount: '', cat: '', note: '', date: today() };
+  sheetCtx = { kind: mode === 'in' ? 'income' : 'expense', id: isNew ? null : item.id, cat: item.cat, label: item.label, isNew };
+  const amountVal = keepAmount !== undefined ? keepAmount : (item.amount ? String(item.amount).replace('.', ',') : '');
+  const seg = isNew ? `<div class="seg mode"><button class="${mode === 'out' ? 'on' : ''}" data-a="entryMode" data-m="out">− Ausgabe</button><button class="${mode === 'in' ? 'on in' : ''}" data-a="entryMode" data-m="in">+ Einnahme</button></div>` : '';
+  let body;
+  if (mode === 'out') {
+    const qp = isNew ? quickPicks() : [];
+    sheetCtx.quick = qp;
+    body = `${qp.length ? `<div class="sub small" style="margin:4px 0 6px">Nochmal das Gleiche?</div><div class="chips quick">${qp.map((q, i) => `<button class="chip" data-a="quickAdd" data-i="${i}">${catInfo(q.cat)[1]} ${esc(q.note || catInfo(q.cat)[2])} · ${eur(q.amount)}</button>`).join('')}</div>` : ''}
+      <div class="sub small" style="margin:10px 0 6px">${isNew ? 'Betrag eintippen, dann Kategorie antippen – fertig.' : 'Kategorie'}</div>
+      <div class="cats" id="fCats">${CATS.map(([id, ic, n]) => `<button class="cat ${item.cat === id ? 'on' : ''}" data-a="pickCat" data-c="${id}"><span class="ic">${ic}</span>${n}</button>`).join('')}</div>
+      <details class="more" ${!isNew ? 'open' : ''}><summary>Notiz & Datum</summary><div class="grid2">
+        <label class="field"><span>Notiz</span><input class="input" id="fNote" value="${esc(item.note)}" placeholder="z. B. Kaffee"></label>
+        <label class="field"><span>Datum</span><input class="input" id="fDate" type="date" value="${item.date}"></label></div></details>`;
+  } else {
+    body = `<div class="sub small" style="text-align:center;margin:4px 0 8px">${isNew ? 'Betrag eintippen, dann Art antippen – fertig.' : 'Art'}</div>
+      <div class="chips labels" id="fLabels">${INC_LABELS.map((l) => `<button class="chip ${item.label === l ? 'on' : ''}" data-a="pickLabel" data-l="${l}">${l}</button>`).join('')}</div>
+      <details class="more" ${!isNew ? 'open' : ''}><summary>Bezeichnung & Datum</summary><div class="grid2">
+        <label class="field"><span>Bezeichnung</span><input class="input" id="fLabel" value="${esc(item.label)}"></label>
+        <label class="field"><span>Datum</span><input class="input" id="fDate" type="date" value="${item.date}"></label></div></details>`;
+  }
+  openSheet(`<div class="sh-head">${seg || `<h3>${mode === 'in' ? 'Einnahme bearbeiten' : 'Ausgabe bearbeiten'}</h3>`}</div>
     <div class="sh-body">
-      <input class="amount-in" id="fAmount" inputmode="decimal" placeholder="0,00 €" value="${e.amount ? esc(String(e.amount).replace('.', ',')) : ''}" autocomplete="off">
-      <div class="cats" id="fCats" style="margin-top:8px">${CATS.map(([id, ic, n]) => `<button class="cat ${e.cat === id ? 'on' : ''}" data-a="pickCat" data-c="${id}"><span class="ic">${ic}</span>${n}</button>`).join('')}</div>
-      <div class="grid2" style="margin-top:12px">
-        <label class="field"><span>Notiz (optional)</span><input class="input" id="fNote" value="${esc(e.note)}" placeholder="z. B. Kaffee"></label>
-        <label class="field"><span>Datum</span><input class="input" id="fDate" type="date" value="${e.date}"></label>
-      </div>
+      <input class="amount-in ${mode === 'in' ? 'in' : ''}" id="fAmount" inputmode="decimal" placeholder="0,00 €" value="${esc(amountVal)}" autocomplete="off">
+      ${body}
     </div>
-    <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : `<button class="btn danger" data-a="delExpense">Löschen</button>`}<button class="btn primary grow" data-a="saveExpense">Speichern</button></div>`);
+    <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : `<button class="btn danger" data-a="${mode === 'in' ? 'delIncome' : 'delExpense'}">Löschen</button>`}<button class="btn primary grow" data-a="${mode === 'in' ? 'saveIncome' : 'saveExpense'}">Speichern</button></div>`);
   if (isNew) setTimeout(() => { const a = $('#fAmount'); if (a) a.focus(); }, 250);
 }
 
-/* ---------- Fixkosten ---------- */
+/* ---------- Verlauf ---------- */
 
-VIEWS.fixkosten = () => {
-  const cur = curPeriod();
+VIEWS.verlauf = () => {
+  const c = calc(ui.period);
+  const f = ui.vFilter || 'alle';
+  const incs = S.incomes.filter((i) => inPeriod(i.date, ui.period)).map((i) => Object.assign({ kind: 'in' }, i));
+  const exps = c.exps.map((e) => Object.assign({ kind: 'out' }, e));
+  const used = catTotals(c.exps);
+  if (ui.expCat !== 'alle' && !used.some((u) => u.id === ui.expCat)) ui.expCat = 'alle';
+  const list = (f === 'in' ? incs : f === 'out' ? exps.filter((e) => ui.expCat === 'alle' || e.cat === ui.expCat) : incs.concat(exps)).sort(byDateDesc);
+  const days = {};
+  for (const x of list) (days[x.date] = days[x.date] || []).push(x);
+  const daySum = (xs) => xs.reduce((a, x) => a + (x.kind === 'in' ? num(x.amount) : -num(x.amount)), 0);
+  return `<h1>Verlauf</h1>${periodNav()}
+    <div class="stats"><div class="stat"><b class="num pos">+${eur0(c.oneOff)}</b><span>Einnahmen</span></div>
+      <div class="stat"><b class="num">−${eur0(c.vari)}</b><span>Ausgaben</span></div>
+      <div class="stat"><b class="num">${exps.length + incs.length}</b><span>Einträge</span></div></div>
+    <div class="seg" style="margin-top:14px">${[['alle', 'Alle'], ['out', 'Ausgaben'], ['in', 'Einnahmen']].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-a="vFilter" data-f="${k}">${l}</button>`).join('')}</div>
+    ${f === 'out' && used.length ? `<div class="chips"><button class="chip ${ui.expCat === 'alle' ? 'on' : ''}" data-a="expCat" data-c="alle">Alle</button>${used.map((u) =>
+      `<button class="chip ${ui.expCat === u.id ? 'on' : ''}" data-a="expCat" data-c="${u.id}">${catInfo(u.id)[1]} ${catInfo(u.id)[2]}</button>`).join('')}</div>` : ''}
+    ${c.fix || c.rent ? `<p class="note" style="margin:10px 4px 0">Läuft automatisch mit: ${c.fix ? 'Fixkosten −' + eur0(c.fix) : ''}${c.fix && c.rent ? ' · ' : ''}${c.rent ? 'feste Einnahmen +' + eur0(c.rent) : ''} <button class="link" data-a="go" data-v="planung">Planung ›</button></p>` : ''}
+    ${list.length ? Object.entries(days).map(([d, xs]) => { const sm = daySum(xs); return `<div class="daygrp"><div class="daygrp-h"><span>${niceDate(d)}</span><b class="${sm > 0 ? 'pos' : ''}">${sm > 0 ? '+' : sm < 0 ? '−' : ''}${eur(Math.abs(sm))}</b></div>
+      <div class="list">${xs.map((x) => (x.kind === 'in' ? incRow(x) : expRow(x))).join('')}</div></div>`; }).join('') :
+      '<div class="empty">Noch nichts eingetragen in diesem Monat.<br>Tipp unten rechts auf <b>+</b>.</div>'}
+    <div style="height:80px"></div>`;
+};
+
+/* ---------- Planung (Fixkosten, feste Einnahmen, Provision) ---------- */
+
+function fixedRow(f) {
+  const cur = curPeriod(), on = fixedActive(f, cur);
+  const ta = f.toAsset && S.assets.find((a) => a.id === f.toAsset);
+  return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editFixed" data-id="${f.id}">
+      <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${(f.interval || 1) > 1 ? ' · ' + eur(monthly(f)) + '/Monat' : ''}${f.day ? ' · am ' + f.day + '.' : ''}${ta ? ' · ↻ ' + esc(ta.name) : ''}${rangeText(f) ? '<br>' + rangeText(f) : ''}</div></div>
+      <span class="amt">${eur(monthly(f))}</span></button>
+    <button class="toggle ${on ? 'on' : ''}" data-a="toggleFixed" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
+}
+function recRow(f) {
+  const on = fixedActive(f, curPeriod());
+  return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editRec" data-id="${f.id}"><span class="ic" style="background:#fb718522">🏢</span>
+    <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${rangeText(f) ? ' · ' + rangeText(f) : ''}</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>
+    <button class="toggle ${on ? 'on' : ''}" data-a="toggleRec" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
+}
+
+VIEWS.planung = () => {
+  const cur = curPeriod(), curC = calc(cur);
   const active = S.fixed.filter((f) => fixedActive(f, cur));
+  const ended = S.fixed.filter((f) => !fixedActive(f, cur));
   const sum = active.reduce((a, f) => a + monthly(f), 0);
-  const avg = avgIncome(6) || calc(cur).inc;
-  const groups = FIXCATS.map((fc) => ({ fc, items: S.fixed.filter((f) => f.cat === fc[0]) })).filter((g) => g.items.length);
-  return `<div class="row spread"><h1>Fixkosten</h1><button class="btn sm primary" style="margin-top:16px" data-a="addFixed">+ Neu</button></div>
-    <div class="card hero" style="margin-top:12px"><div class="sub">Gehen jeden Monat automatisch ab</div>
+  const avg = avgIncome(6);
+  const groups = FIXCATS.map((fc) => ({ fc, items: active.filter((f) => f.cat === fc[0]) })).filter((g) => g.items.length);
+  const recA = S.recIncomes.filter((f) => fixedActive(f, cur)), recE = S.recIncomes.filter((f) => !fixedActive(f, cur));
+  const series = [];
+  for (let i = 11; i >= 0; i--) { const p = shiftPeriod(cur, -i); series.push({ label: periodLabel(p, 1), v: S.incomes.filter((x) => inPeriod(x.date, p)).reduce((a, x) => a + num(x.amount), 0) }); }
+  const nz = series.filter((x) => x.v);
+  const sAvg = nz.length ? nz.reduce((a, x) => a + x.v, 0) / nz.length : 0;
+  const prop = curC.rent || curC.propCost ? `<h2>🏢 Immobilie pro Monat</h2><div class="card">
+      ${hbars([{ label: 'Miete', v: curC.rent, color: '#22c55e' }, { label: 'Kosten', v: curC.propCost, color: '#fb7185' }])}
+      <div class="kv" style="font-weight:700;margin-top:8px"><span>= ${curC.rent >= curC.propCost ? 'Überschuss' : 'Unterdeckung'}</span><b class="${curC.rent >= curC.propCost ? 'pos' : 'neg'}">${eur(curC.rent - curC.propCost)}</b></div>
+      <p class="note" style="margin:6px 0 0">Kosten = Fixkosten mit Kategorie „Immobilie (vermietet)“.</p></div>` : '';
+  return `<div class="row spread"><h1>Planung</h1><button class="btn sm primary" style="margin-top:16px" data-a="addFixed">+ Fixkosten</button></div>
+    <div class="card hero" style="margin-top:12px"><div class="sub">Fixkosten – laufen jeden Monat automatisch</div>
       <div class="hero-num">${eur(sum)}</div>
-      <div class="sub">${eur0(sum * 12)} pro Jahr${avg ? ` · ${pct(sum / avg)} deines Ø-Einkommens` : ''}</div></div>
-    ${active.length ? `<h2>Aufteilung</h2><div class="card">${donut(FIXCATS.map((fc) => ({ label: fc[1] + ' ' + fc[2], color: fc[3], v: active.filter((f) => f.cat === fc[0]).reduce((a, f) => a + monthly(f), 0) })).sort((a, b) => b.v - a.v), eur0(sum), 'pro Monat')}</div>` : ''}
-    ${groups.length ? groups.map((g) => `<h2>${g.fc[1]} ${g.fc[2]}</h2><div class="list">${g.items.map((f) => {
-      const on = fixedActive(f, cur);
-      return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editFixed" data-id="${f.id}">
-          <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${(f.interval || 1) > 1 ? ' · ' + eur(monthly(f)) + '/Monat' : ''}${f.day ? ' · am ' + f.day + '.' : ''}${rangeText(f) ? '<br>' + rangeText(f) : ''}</div></div>
-          <span class="amt">${eur(monthly(f))}</span></button>
-        <button class="toggle ${on ? 'on' : ''}" data-a="toggleFixed" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
-    }).join('')}</div>`).join('') :
-      `<div class="empty">Noch keine Fixkosten.<br>Trag alles ein, was regelmäßig abgeht: Handy, Versicherungen, Abos, Auto, Fitnessstudio …</div>`}
-    ${S.fixed.length ? '<button class="btn block" style="margin-top:16px" data-a="bulkStart">📅 Alle Fixkosten ab einem Monat gelten lassen</button>' : ''}
-    <p class="note" style="margin-top:16px">Jährliche oder vierteljährliche Kosten werden anteilig pro Monat gerechnet – so legst du automatisch dafür zurück. Mit dem Schalter pausierst du einen Posten ab diesem Monat; frühere Monate bleiben unverändert. Ab wann ein Posten gilt, stellst du beim Antippen unter „Gilt seit“ ein.</p>
+      <div class="sub">${eur0(sum * 12)} pro Jahr${avg ? ' · ' + pct(sum / avg) + ' deiner Ø-Provision' : ''}</div></div>
+    ${active.length ? `<div class="card" style="margin-top:12px">${donut(FIXCATS.map((fc) => ({ label: fc[1] + ' ' + fc[2], color: fc[3], v: active.filter((f) => f.cat === fc[0]).reduce((a, f) => a + monthly(f), 0) })).sort((a, b) => b.v - a.v), eur0(sum), 'pro Monat')}</div>` : ''}
+    ${groups.length ? groups.map((g) => `<h2>${g.fc[1]} ${g.fc[2]}</h2><div class="list">${g.items.map(fixedRow).join('')}</div>`).join('') :
+      '<div class="empty">Noch keine Fixkosten.<br>Trag alles ein, was regelmäßig abgeht: Handy, Versicherungen, Abos, Auto, Sparpläne …</div>'}
+    ${ended.length ? `<details class="more box"><summary>Beendet oder pausiert (${ended.length})</summary><div class="list">${ended.map(fixedRow).join('')}</div></details>` : ''}
+    <div class="row spread"><h2>Feste Einnahmen</h2><button class="link" data-a="addRec">+ Miete o. Ä.</button></div>
+    ${recA.length ? `<div class="list">${recA.map(recRow).join('')}</div>` : '<p class="note" style="margin:0">Mieteinnahmen o. Ä. einmal anlegen – sie zählen dann jeden Monat automatisch.</p>'}
+    ${recE.length ? `<details class="more box"><summary>Beendet oder pausiert (${recE.length})</summary><div class="list">${recE.map(recRow).join('')}</div></details>` : ''}
+    ${prop}
+    <h2>Deine Provision</h2>
+    <div class="stats"><div class="stat"><b class="num">${eur0(avgIncome(3))}</b><span>Ø 3 Monate</span></div>
+      <div class="stat"><b class="num">${eur0(avgIncome(6))}</b><span>Ø 6 Monate</span></div>
+      <div class="stat"><b class="num">${eur0(avgIncome(12))}</b><span>Ø 12 Monate</span></div></div>
+    <div class="card" style="margin-top:12px">${nz.length ? barChart(series, sAvg, '#22c55e') : '<p class="sub" style="margin:0">Sobald du Provisionen einträgst, siehst du hier, wie stark sie schwanken.</p>'}</div>
+    <p class="note" style="margin-top:16px">Änderst du einen Betrag, gilt er automatisch ab diesem Monat – frühere Monate bleiben richtig. Jährliche Kosten werden anteilig pro Monat gerechnet.</p>
     <div style="height:70px"></div>`;
 };
 
+function scopeField(item) {
+  const fresh = item.created && dkey(periodOf(new Date(item.created))) === dkey(curPeriod());
+  return `<div class="scope"><span class="sub small">Neuer Betrag gilt</span>
+    <label><input type="radio" name="scope" value="now" ${fresh ? '' : 'checked'}> ab diesem Monat</label>
+    <label><input type="radio" name="scope" value="all" ${fresh ? 'checked' : ''}> für alle Monate (Korrektur)</label></div>`;
+}
+
 function fixedSheet(f) {
   const isNew = !f;
-  f = f || { name: '', amount: '', interval: 1, cat: 'versicherung', day: '', start: '', end: '' };
+  f = f || { name: '', amount: '', interval: 1, cat: 'versicherung', day: '', start: '', end: '', toAsset: '', tilgung: '' };
   sheetCtx = { kind: 'fixed', id: isNew ? null : f.id };
+  const ta = S.assets.find((a) => a.id === f.toAsset);
   openSheet(`<div class="sh-head"><h3>${isNew ? 'Fixkosten hinzufügen' : 'Fixkosten bearbeiten'}</h3></div>
     <div class="sh-body stack">
       <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(f.name)}" placeholder="z. B. Handyvertrag"></label>
       <div class="grid2"><label class="field"><span>Betrag (€)</span><input class="input" id="fAmount" inputmode="decimal" value="${f.amount ? esc(String(f.amount).replace('.', ',')) : ''}" placeholder="0,00"></label>
         <label class="field"><span>Wie oft?</span><select class="input" id="fInterval">${INTERVALS.map(([v, l]) => `<option value="${v}" ${v === (f.interval || 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-      <div class="grid2"><label class="field"><span>Kategorie</span><select class="input" id="fCat">${FIXCATS.map(([id, ic, n]) => `<option value="${id}" ${id === f.cat ? 'selected' : ''}>${ic} ${n}</option>`).join('')}</select></label>
-        <label class="field"><span>Abbuchung am (Tag)</span><input class="input" id="fDay" inputmode="numeric" value="${esc(f.day || '')}" placeholder="optional"></label></div>
-      ${rangeFields(f)}
+      ${isNew ? '' : scopeField(f)}
+      <label class="field"><span>Kategorie</span><select class="input" id="fCat">${FIXCATS.map(([id, ic, n]) => `<option value="${id}" ${id === f.cat ? 'selected' : ''}>${ic} ${n}</option>`).join('')}</select></label>
+      ${S.assets.length ? `<label class="field"><span>Fließt automatisch in Topf (optional)</span><select class="input" id="fToAsset"><option value="">– nein –</option>${S.assets.map((a) => `<option value="${a.id}" ${a.id === f.toAsset ? 'selected' : ''}>${assetType(a.type)[1]} ${esc(a.name)}</option>`).join('')}</select></label>
+      <div id="tilgWrap" ${ta && ta.type === 'schulden' ? '' : 'hidden'}><label class="field"><span>Davon Tilgung pro Monat (€)</span><input class="input" id="fTilg" inputmode="decimal" value="${f.tilgung ? esc(String(f.tilgung).replace('.', ',')) : ''}" placeholder="leer = ganze Rate"></label></div>
+      <p class="note" style="margin:-2px 0 0">Z. B. ETF-Sparplan → Depot, Kreditrate → Immobilienkredit. Dann rechnet dein Vermögen jeden Monat von selbst weiter.</p>` : ''}
+      <details class="more"><summary>Mehr: Abbuchungstag & Zeitraum</summary>
+        <label class="field" style="margin-bottom:10px"><span>Abbuchung am (Tag)</span><input class="input" id="fDay" inputmode="numeric" value="${esc(f.day || '')}" placeholder="optional"></label>
+        ${rangeFields(f)}</details>
     </div>
     <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delFixed">Löschen</button>'}<button class="btn primary grow" data-a="saveFixed">Speichern</button></div>`);
 }
 
-/* ---------- Einnahmen ---------- */
-
-VIEWS.einnahmen = () => {
-  const cur = curPeriod();
-  const series = [];
-  for (let i = 11; i >= 0; i--) {
-    const p = shiftPeriod(cur, -i);
-    series.push({ label: periodLabel(p, 1), v: S.incomes.filter((x) => inPeriod(x.date, p)).reduce((a, x) => a + num(x.amount), 0) });
+// Betragsänderung „ab diesem Monat“: alten Posten beenden, neuen ab jetzt anlegen.
+function applyChange(list, item, data, amountChanged) {
+  const cur = dkey(curPeriod());
+  const sc = document.querySelector('input[name=scope]:checked');
+  const scope = sc ? sc.value : 'all';
+  const runsNow = (!item.end || item.end > cur);
+  if (amountChanged && scope === 'now' && (!item.start || item.start < cur) && runsNow) {
+    const rest = Object.assign({}, data); delete rest.start; delete rest.end;
+    const newEnd = item.end && item.end > cur ? item.end : '';
+    const newItem = Object.assign({}, item, rest, { id: uid(), start: cur, end: newEnd, created: Date.now() });
+    for (const k of ['name', 'cat', 'day', 'toAsset', 'tilgung']) if (k in rest) item[k] = rest[k];
+    item.end = cur;
+    list.push(newItem);
+    return true;
   }
-  const nonzero = series.filter((s) => s.v);
-  const avg = nonzero.length ? nonzero.reduce((a, s) => a + s.v, 0) / nonzero.length : 0;
-  const sorted = S.incomes.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-  const groups = {};
-  for (const i of sorted) { const k = dkey(periodOf(parseD(i.date))); (groups[k] = groups[k] || []).push(i); }
-  const curC = calc(cur);
-  const recHtml = S.recIncomes.length ? `<div class="list">${S.recIncomes.map((f) => {
-    const on = fixedActive(f, cur);
-    return `<div class="item ${on ? '' : 'off'}"><button class="grow row" style="text-align:left" data-a="editRec" data-id="${f.id}"><span class="ic" style="filter:none;background:#fb718522">🏢</span>
-      <div class="grow"><div class="name">${esc(f.name)}</div><div class="meta">${eur(num(f.amount))} ${INTERVALS.find((i) => i[0] === (f.interval || 1))[1]}${rangeText(f) ? ' · ' + rangeText(f) : ''}</div></div><span class="amt pos">+${eur(monthly(f))}</span></button>
-      <button class="toggle ${on ? 'on' : ''}" data-a="toggleRec" data-id="${f.id}" aria-label="${on ? 'Pausieren' : 'Aktivieren'}"></button></div>`;
-  }).join('')}</div>` : '<p class="note" style="margin:0">Mieteinnahmen o. Ä. hier einmal anlegen – sie zählen dann jeden Monat automatisch zu deinen Einnahmen.</p>';
-  const prop = curC.rent || curC.propCost ? `<h2>🏢 Immobilien-Bilanz pro Monat</h2><div class="card">
-      ${hbars([{ label: 'Miete', v: curC.rent, color: '#22c55e' }, { label: 'Kosten', v: curC.propCost, color: '#fb7185' }])}
-      <div style="height:6px"></div>
-      <div class="kv"><span>Mieteinnahmen</span><b class="pos">+${eur(curC.rent)}</b></div>
-      <div class="kv"><span>Kosten (Fixkosten „Immobilie“)</span><b>−${eur(curC.propCost)}</b></div>
-      <div class="kv" style="font-weight:700"><span>= ${curC.rent >= curC.propCost ? 'Überschuss' : 'Unterdeckung'}</span><b class="${curC.rent >= curC.propCost ? 'pos' : 'neg'}">${eur(curC.rent - curC.propCost)}</b></div>
-      <p class="note" style="margin:8px 0 0">Kosten wie Kreditrate, Hausgeld, Grundsteuer oder Rücklage trägst du unter Fixkosten mit der Kategorie „Immobilie (vermietet)“ ein.</p></div>` : '';
-  return `<div class="row spread"><h1>Einnahmen</h1><button class="btn sm primary" style="margin-top:16px" data-a="addIncome">+ Neu</button></div>
-    ${curC.inc ? `<div class="card" style="margin-top:12px">${donut([{ label: 'Provision & Co.', v: curC.oneOff, color: '#22c55e' }, { label: 'Feste Einnahmen (Miete)', v: curC.rent, color: '#fb7185' }], eur0(curC.inc), 'diesen Monat')}</div>` : ''}
-    <div class="row spread"><h2>Diesen Monat eingetragen</h2><button class="link" data-a="addIncome">+ Einnahme</button></div>
-    ${(() => { const mine = S.incomes.filter((i) => inPeriod(i.date, cur)).sort((a, b) => (a.date < b.date ? 1 : -1));
-      return mine.length ? `<div class="list">${mine.map(incRow).join('')}</div>` : '<p class="note" style="margin:0">Noch keine Provision für diesen Monat eingetragen.</p>'; })()}
-    <div class="row spread"><h2>Feste Einnahmen</h2><button class="link" data-a="addRec">+ Mieteinnahme</button></div>${recHtml}
-    ${prop}
-    <h2>Provision & Co.</h2>
-    <div class="stats"><div class="stat"><b class="num">${eur0(avgIncome(3))}</b><span>Ø 3 Monate</span></div>
-      <div class="stat"><b class="num">${eur0(avgIncome(6))}</b><span>Ø 6 Monate</span></div>
-      <div class="stat"><b class="num">${eur0(avgIncome(12))}</b><span>Ø 12 Monate</span></div></div>
-    <h2>Letzte 12 Monate</h2><div class="card">${nonzero.length ? barChart(series, avg, '#22c55e') : '<p class="sub" style="margin:0">Sobald du Einnahmen einträgst, siehst du hier, wie stark deine Provision schwankt.</p>'}
-      ${nonzero.length > 1 ? `<div class="stats two" style="margin-top:12px"><div class="stat"><b class="num">${eur0(Math.min(...nonzero.map((s) => s.v)))}</b><span>schwächster Monat</span></div><div class="stat"><b class="num">${eur0(Math.max(...nonzero.map((s) => s.v)))}</b><span>stärkster Monat</span></div></div>` : ''}</div>
-    ${Object.keys(groups).length ? Object.entries(groups).map(([k, items]) => `<div class="daygrp"><div class="daygrp-h"><span>${periodLabel(parseD(k))}</span><b>${eur(items.reduce((a, i) => a + num(i.amount), 0))}</b></div>
-      <div class="list">${items.map(incRow).join('')}</div></div>`).join('') :
-      '<div class="empty">Noch keine Einnahmen eingetragen.</div>'}
-    <p class="note" style="margin-top:16px">Tipp: Plane mit deinem <b>Ø-Einkommen</b> oder sogar mit dem schwächsten Monat – nicht mit dem besten. So bringen dich schwache Provisionsmonate nicht ins Schwitzen.</p>
-    <div style="height:70px"></div>`;
-};
-
-function incomeSheet(i) {
-  const isNew = !i;
-  if (!i) {
-    const d = new Date(), payday = new Date(d.getFullYear(), d.getMonth(), 15);
-    i = { amount: '', label: 'Provision', date: d.getDate() >= 15 ? dkey(payday) : today() };
-  }
-  sheetCtx = { kind: 'income', id: isNew ? null : i.id };
-  openSheet(`<div class="sh-head"><h3>${isNew ? 'Einnahme eintragen' : 'Einnahme bearbeiten'}</h3></div>
-    <div class="sh-body stack">
-      <input class="amount-in" id="fAmount" inputmode="decimal" placeholder="0,00 €" value="${i.amount ? esc(String(i.amount).replace('.', ',')) : ''}" autocomplete="off">
-      <div class="chips" style="justify-content:center">${['Provision', 'Bonus', 'Erstattung', 'Sonstiges'].map((l) => `<button class="chip ${i.label === l ? 'on' : ''}" data-a="pickLabel" data-l="${l}">${l}</button>`).join('')}</div>
-      <div class="grid2"><label class="field"><span>Bezeichnung</span><input class="input" id="fLabel" value="${esc(i.label)}"></label>
-        <label class="field"><span>Datum</span><input class="input" id="fDate" type="date" value="${i.date}"></label></div>
-    </div>
-    <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delIncome">Löschen</button>'}<button class="btn primary grow" data-a="saveIncome">Speichern</button></div>`);
-  if (isNew) setTimeout(() => { const a = $('#fAmount'); if (a) a.focus(); }, 250);
+  Object.assign(item, data);
+  return false;
 }
 
 /* ---------- Vermögen ---------- */
 
-function assetValue(a, upTo) {
+// Letzter von Hand eingetragener Stand (= Abgleich mit dem echten Konto)
+function manualSnap(a, upTo) {
   const h = (a.history || []).filter((x) => !upTo || x.date <= upTo);
-  return h.length ? num(h[h.length - 1].value) : null;
+  return h.length ? h[h.length - 1] : null;
+}
+// Automatische Bewegungen ab dem Monat nach dem letzten Abgleich:
+// verknüpfte Fixkosten (Sparpläne, Tilgung) und der Monatsrest abgeschlossener Monate.
+function autoFlow(a, fromDate, upTo) {
+  const lim = upTo || today();
+  const debt = a.type === 'schulden';
+  const linked = S.fixed.filter((f) => f.toAsset === a.id);
+  const getsRest = !debt && S.settings.restTo === a.id;
+  if (!linked.length && !getsRest) return 0;
+  let p = shiftPeriod(periodOf(parseD(fromDate)), 1), sum = 0, guard = 0;
+  while (dkey(p) <= lim && guard++ < 360) {
+    for (const f of linked) if (fixedActive(f, p)) sum += debt ? -(num(f.tilgung) || monthly(f)) : monthly(f);
+    if (getsRest && dkey(periodEnd(p)) <= lim) { const c = calc(p); if (c.oneOff || c.vari) sum += c.rest; }
+    p = shiftPeriod(p, 1);
+  }
+  return sum;
+}
+function assetValue(a, upTo) {
+  const snap = manualSnap(a, upTo);
+  if (!snap) return null;
+  const v = num(snap.value) + autoFlow(a, snap.date, upTo);
+  return a.type === 'schulden' ? Math.max(0, v) : v;
+}
+function linkedMonthly(a) {
+  const cur = curPeriod();
+  return S.fixed.filter((f) => f.toAsset === a.id && fixedActive(f, cur)).reduce((s2, f) => s2 + (a.type === 'schulden' ? (num(f.tilgung) || monthly(f)) : monthly(f)), 0);
 }
 function signed(a, v) { return a.type === 'schulden' ? -Math.abs(v) : v; }
 function netWorth(upTo) {
@@ -497,8 +568,13 @@ function netWorth(upTo) {
   return { assets, debts, net: assets - debts };
 }
 function netHistory() {
-  const dates = [...new Set(S.assets.flatMap((a) => (a.history || []).map((h) => h.date)))].sort();
-  return dates.map((d) => ({ label: parseD(d).getDate() + '.' + (parseD(d).getMonth() + 1) + '.', date: d, v: netWorth(d).net }));
+  const snaps = S.assets.flatMap((a) => (a.history || []).map((h) => h.date)).sort();
+  if (!snaps.length) return [];
+  const dates = new Set(snaps);
+  // zusätzlich jeder Monatsanfang, damit die automatischen Bewegungen in der Kurve sichtbar werden
+  for (let p = shiftPeriod(periodOf(parseD(snaps[0])), 1), g = 0; dkey(p) <= today() && g < 120; p = shiftPeriod(p, 1), g++) dates.add(dkey(p));
+  dates.add(today());
+  return [...dates].sort().map((d) => ({ label: parseD(d).getDate() + '.' + (parseD(d).getMonth() + 1) + '.', date: d, v: netWorth(d).net }));
 }
 
 VIEWS.vermoegen = () => {
@@ -516,6 +592,13 @@ VIEWS.vermoegen = () => {
       <div class="hero-num ${nw.net < 0 ? 'neg' : ''}">${S.assets.length ? eur(nw.net) : '–'}</div>
       <div class="sub">${S.assets.length ? `${eur0(nw.assets)} Vermögen${nw.debts ? ' · ' + eur0(nw.debts) + ' Schulden' : ''}` : 'Leg deinen ersten Topf an – z. B. dein Tagesgeldkonto.'}
       ${delta !== null ? `<br><span class="${delta >= 0 ? 'pos' : 'neg'}" style="font-weight:700">${delta >= 0 ? '▲ +' : '▼ '}${eur0(delta)}</span> in den letzten 30 Tagen` : ''}</div></div>
+    ${(() => {
+      const own = S.assets.filter((a) => a.type !== 'schulden');
+      if (!own.length) return '';
+      const sel = `<select class="input" id="restToSel"><option value="">– nicht automatisch –</option>${own.map((a) => `<option value="${a.id}" ${S.settings.restTo === a.id ? 'selected' : ''}>${assetType(a.type)[1]} ${esc(a.name)}</option>`).join('')}</select>`;
+      return S.settings.restTo ? '' : `<div class="card auto" style="margin-top:12px"><h3>🔄 Automatisch weiterrechnen</h3>
+        <p class="note" style="margin:4px 0 10px">Was am Monatsende übrig bleibt, landet automatisch in diesem Topf – du musst dein Vermögen nicht mehr ständig nachtragen:</p>${sel}</div>`;
+    })()}
     ${nw.assets ? `<h2>Wo dein Geld liegt</h2>
       ${propVal ? `<div class="seg"><button class="${showProp ? '' : 'on'}" data-a="propToggle" data-v="0">Ohne Immobilie</button><button class="${showProp ? 'on' : ''}" data-a="propToggle" data-v="1">Alles</button></div>` : ''}
       <div class="card">${donut(byType, eur0(byType.reduce((s2, x) => s2 + x.v, 0)), showProp ? 'Vermögen' : 'ohne Immobilie')}</div>` : ''}
@@ -538,14 +621,20 @@ VIEWS.vermoegen = () => {
     })() : ''}
     ${hist.length > 1 ? `<h2>Entwicklung</h2><div class="card"><span class="sub small">Nettovermögen</span>${lineChart(hist, '#22c55e')}</div>` : ''}
     ${groups.length ? groups.map((g) => `<h2>${g.t[1]} ${g.t[2]}</h2><div class="list">${g.items.map((a) => {
-      const h = a.history || [], v = assetValue(a) || 0, prev = h.length > 1 ? num(h[h.length - 2].value) : null;
-      const d = prev === null ? null : v - prev;
-      return `<button class="item" data-a="editAsset" data-id="${a.id}"><span class="ic" style="filter:none;background:${g.t[3]}22">${g.t[1]}</span>
-        <div class="grow"><div class="name">${esc(a.name)}</div><div class="meta">Stand ${h.length ? niceDate(h[h.length - 1].date) : '–'}${d ? ` · <span class="${(d > 0) !== (a.type === 'schulden') ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${eur0(d)}</span>` : ''}</div></div>
+      const h = a.history || [], v = assetValue(a) || 0, snap = manualSnap(a);
+      const auto = snap ? v - num(snap.value) : 0, perM = linkedMonthly(a), isRest = S.settings.restTo === a.id;
+      const debt = a.type === 'schulden';
+      const parts = [];
+      if (Math.abs(auto) >= 1) parts.push(`<span class="${(auto > 0) !== debt ? 'pos' : 'neg'}">${auto > 0 ? '+' : '−'}${eur0(Math.abs(auto))} automatisch</span> seit ${niceDate(snap.date)}`);
+      else parts.push('Stand ' + (h.length ? niceDate(h[h.length - 1].date) : '–'));
+      if (perM) parts.push(`↻ ${debt ? '−' : '+'}${eur0(perM)}/Monat`);
+      if (isRest) parts.push('↻ bekommt den Monatsrest');
+      return `<button class="item" data-a="editAsset" data-id="${a.id}"><span class="ic" style="background:${g.t[3]}22">${g.t[1]}</span>
+        <div class="grow"><div class="name">${esc(a.name)}</div><div class="meta">${parts.join(' · ')}</div></div>
         <span class="amt ${a.type === 'schulden' ? 'neg' : ''}">${a.type === 'schulden' ? '−' : ''}${eur(Math.abs(v))}</span></button>`;
     }).join('')}</div>`).join('') :
       `<div class="empty">Noch keine Töpfe.<br>Leg für jedes Konto, Depot, jede Versicherung, deinen Goldsparplan und deine Immobilie einen Topf an. Kredite trägst du als „Kredite & Schulden“ ein.</div>`}
-    <p class="note" style="margin-top:16px">Tipp: Aktualisiere die Werte einmal im Monat, z. B. am Zahltag. Jeder neue Stand wird gespeichert – daraus entsteht die Entwicklungskurve. Die Immobilie trägst du mit ihrem Marktwert ein und den Restkredit als Schulden.</p>
+    <p class="note" style="margin-top:16px">So rechnet dein Vermögen von selbst: Der Monatsrest fließt in den gewählten Topf, Sparpläne und Kreditraten, die du unter Planung mit einem Topf verknüpfst, werden jeden Monat automatisch gebucht. Ab und zu antippen und den echten Kontostand eintragen – das ist dann der neue Abgleich.</p>
     <div style="height:70px"></div>`;
 };
 
@@ -554,13 +643,13 @@ function assetSheet(a, preset) {
   a = a || Object.assign({ name: '', type: 'konto', history: [] }, preset);
   const v = assetValue(a);
   sheetCtx = { kind: 'asset', id: isNew ? null : a.id };
-  openSheet(`<div class="sh-head"><h3>${isNew ? (a.type === 'schulden' ? 'Kredit eintragen' : 'Neuer Topf') : esc(a.name)}</h3>${isNew && a.type === 'schulden' ? '<p class="sub" style="margin:4px 0 0">Trag die aktuelle Restschuld laut Bank ein – nicht die ursprüngliche Kreditsumme.</p>' : ''}${isNew ? '' : '<p class="sub" style="margin:4px 0 0">Neuen Kontostand eintragen – der alte bleibt im Verlauf.</p>'}</div>
+  openSheet(`<div class="sh-head"><h3>${isNew ? (a.type === 'schulden' ? 'Kredit eintragen' : 'Neuer Topf') : esc(a.name)}</h3>${isNew && a.type === 'schulden' ? '<p class="sub" style="margin:4px 0 0">Trag die aktuelle Restschuld laut Bank ein – nicht die ursprüngliche Kreditsumme.</p>' : ''}${isNew ? '' : '<p class="sub" style="margin:4px 0 0">Echten Kontostand eintragen = Abgleich. Ab dann rechnet die App automatisch weiter.</p>'}</div>
     <div class="sh-body stack">
       <input class="amount-in" id="fAmount" inputmode="decimal" placeholder="0,00 €" value="${v !== null ? esc(String(Math.abs(v)).replace('.', ',')) : ''}" autocomplete="off">
       <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(a.name)}" placeholder="z. B. Tagesgeld ING, ETF-Depot, Goldsparplan"></label>
       <label class="field"><span>Art</span><select class="input" id="fType">${ASSET_TYPES.map(([id, ic, n]) => `<option value="${id}" ${id === a.type ? 'selected' : ''}>${ic} ${n}</option>`).join('')}</select></label>
       ${(a.history || []).length > 1 ? `<h2 style="margin:12px 0 0">Verlauf</h2>${lineChart(a.history.map((h) => ({ label: parseD(h.date).getDate() + '.' + (parseD(h.date).getMonth() + 1) + '.', v: num(h.value) })), assetType(a.type)[3])}
-        <div class="list">${a.history.slice(-6).reverse().map((h) => `<div class="item"><span class="grow">${niceDate(h.date)}</span><b class="num">${eur(num(h.value))}</b></div>`).join('')}</div>` : ''}
+        <div class="sub small">Deine Abgleiche</div><div class="list">${a.history.slice(-6).reverse().map((h) => `<div class="item"><span class="grow">${niceDate(h.date)}</span><b class="num">${eur(num(h.value))}</b></div>`).join('')}</div>` : ''}
     </div>
     <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delAsset">Löschen</button>'}<button class="btn primary grow" data-a="saveAsset">Speichern</button></div>`);
   setTimeout(() => { const el = $('#fAmount'); if (el) { el.focus(); el.select(); } }, 250);
@@ -575,7 +664,8 @@ function recSheet(f) {
       <label class="field"><span>Bezeichnung</span><input class="input" id="fName" value="${esc(f.name)}" placeholder="z. B. Miete Wohnung"></label>
       <div class="grid2"><label class="field"><span>Betrag (€)</span><input class="input" id="fAmount" inputmode="decimal" value="${f.amount ? esc(String(f.amount).replace('.', ',')) : ''}" placeholder="0,00"></label>
         <label class="field"><span>Wie oft?</span><select class="input" id="fInterval">${INTERVALS.map(([v, l]) => `<option value="${v}" ${v === (f.interval || 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-      ${rangeFields(f)}
+      ${isNew ? '' : scopeField(f)}
+      <details class="more"><summary>Mehr: Zeitraum</summary>${rangeFields(f)}</details>
       <p class="note" style="margin:0">Auf feste Einnahmen wird keine Steuerrücklage gerechnet – Mieteinnahmen werden nach Abzug der Kosten versteuert. Wenn du dafür etwas zurücklegen willst, leg dir einen Fixkosten-Posten „Steuer Miete“ an.</p>
     </div>
     <div class="sh-foot row">${isNew ? '<button class="btn grow" data-a="closeSheet">Abbrechen</button>' : '<button class="btn danger" data-a="delRec">Löschen</button>'}<button class="btn primary grow" data-a="saveRec">Speichern</button></div>`);
@@ -592,14 +682,14 @@ VIEWS.statistik = () => {
   const year = new Date().getFullYear();
   const ycs = [];
   for (let m = 0; m < 12; m++) { const p = periodOf(new Date(year, m, Math.max(sd(), 1))); if (p <= cur) ycs.push(calc(p)); }
-  const Y = ycs.reduce((a, c) => ({ inc: a.inc + c.inc, fix: a.fix + (c.inc || c.vari ? c.fix : 0), vari: a.vari + c.vari, tax: a.tax + c.tax }), { inc: 0, fix: 0, vari: 0, tax: 0 });
+  const Y = ycs.reduce((a, c) => ({ inc: a.inc + (c.oneOff || c.vari ? c.inc : 0), fix: a.fix + (c.oneOff || c.vari ? c.fix : 0), vari: a.vari + c.vari, tax: a.tax + c.tax }), { inc: 0, fix: 0, vari: 0, tax: 0 });
   const ySaved = Y.inc - Y.fix - Y.vari - Y.tax;
 
   const c = calc(ui.period), p = calc(shiftPeriod(ui.period, -1));
   const cats = catTotals(c.exps), prevCats = Object.fromEntries(catTotals(p.exps).map((x) => [x.id, x.v]));
   const top = c.exps.slice().sort((a, b) => num(b.amount) - num(a.amount)).slice(0, 5);
 
-  return `<h1>Statistik</h1>
+  return `<button class="link" style="margin-top:16px" data-a="go" data-v="uebersicht">‹ Übersicht</button><h1 style="margin-top:6px">Statistik</h1>
     <h2>Monate im Vergleich</h2><div class="card">${withInc.length || cs.some((x) => x.vari) ? stackChart(cs) : '<p class="sub" style="margin:0">Hier siehst du bald jeden Monat als Balken: was reinkam, was wohin ging und was übrig blieb.</p>'}
       <div class="legend"><span><i style="background:#a855f7"></i>Steuer</span><span><i style="background:#f97316"></i>Fixkosten</span><span><i style="background:#3b82f6"></i>Variabel</span><span><i style="background:#22c55e"></i>Übrig</span><span><i style="background:var(--danger)"></i>Minus</span></div></div>
     <h2>Jahr ${year}</h2><div class="card">
@@ -687,7 +777,7 @@ function stackChart(cs) {
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${cs.map((c, i) => {
     const x = i * (bw + gap);
     let yy = H - B, out = '';
-    const active = c.inc || c.vari;
+    const active = c.oneOff || c.vari;
     const parts = active ? [['sb-tax', c.tax], ['sb-fix', c.fix], ['sb-var', c.vari]] : [];
     if (active && c.rest > 0) parts.push(['sb-rest', c.rest]);
     for (const [cls, v] of parts) { const h = sc(v); if (h <= 0) continue; yy -= h; out += `<rect class="${cls}" x="${x}" y="${yy}" width="${bw}" height="${h}"/>`; }
@@ -715,6 +805,7 @@ function settingsSheet() {
       <p class="note" style="margin:-2px 0 0">Als Selbstständiger zahlst du Einkommensteuer (und ggf. Umsatzsteuer) selbst nach. Viele legen 25–35 % zurück – wie viel bei dir passt, klärst du am besten mit deinem Steuerberater. 0 = keine Rücklage.</p>
       <label class="field"><span>Sparziel pro Monat (€)</span><input class="input" id="sSave" inputmode="decimal" value="${esc(st.saveGoal)}" placeholder="z. B. 500"></label>
       <label class="field"><span>Budget für variable Ausgaben (€, leer = automatisch)</span><input class="input" id="sBudget" inputmode="decimal" value="${esc(st.varBudget)}" placeholder="automatisch: was nach allem übrig ist"></label>
+      ${S.assets.some((a) => a.type !== 'schulden') ? `<label class="field"><span>Was am Monatsende übrig bleibt, fließt in</span><select class="input" id="sRestTo"><option value="">– nicht automatisch –</option>${S.assets.filter((a) => a.type !== 'schulden').map((a) => `<option value="${a.id}" ${st.restTo === a.id ? 'selected' : ''}>${assetType(a.type)[1]} ${esc(a.name)}</option>`).join('')}</select></label>` : ''}
       <label class="field"><span>Monat beginnt am</span><select class="input" id="sStart">${[1, 15].map((d) => `<option value="${d}" ${sd() === d ? 'selected' : ''}>${d === 1 ? '1. (Kalendermonat)' : '15. (Zahltag der Provision)'}</option>`).join('')}</select></label>
       <h2 style="margin-top:18px">Deine Daten</h2>
       <p class="note" style="margin:0">Alles bleibt nur auf diesem Gerät – nichts wird hochgeladen. Mach regelmäßig ein Backup (z. B. in iCloud Drive oder Google Drive).</p>
@@ -738,30 +829,54 @@ function download(name, text, type) {
 }
 
 const ACT = {
-  go(el) { ui.view = el.dataset.v; closeSheet(); render(); window.scrollTo(0, 0); },
+  go(el) {
+    const legacy = { ausgaben: 'verlauf', einnahmen: 'verlauf', fixkosten: 'planung' };
+    ui.view = legacy[el.dataset.v] || el.dataset.v; closeSheet(); render(); window.scrollTo(0, 0);
+  },
+  vFilter(el) { ui.vFilter = el.dataset.f; ui.expCat = 'alle'; render(); },
+  undo() { if (undoFn) { const f = undoFn; undoFn = null; f(); save(); render(); $('#toast').hidden = true; } },
+  entryMode(el) { const v = $('#fAmount').value; entrySheet(el.dataset.m, null, v); },
+  quickAdd(el) {
+    const q = sheetCtx.quick[+el.dataset.i];
+    const e = { id: uid(), t: Date.now(), amount: q.amount, cat: q.cat, note: q.note, date: today() };
+    S.expenses.push(e); save(); closeSheet(); render();
+    afterExpense(e, true);
+  },
+  quickProvision() {
+    const last = S.incomes.filter((i) => (i.label || 'Provision') === 'Provision').sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    if (!last) { ACT.addIncome(); return; }
+    const inc = { id: uid(), amount: num(last.amount), label: 'Provision', date: today() };
+    S.incomes.push(inc); save(); render();
+    toast(`+${eur(inc.amount)} Provision eingetragen`, () => { S.incomes = S.incomes.filter((i) => i.id !== inc.id); });
+  },
   closeSheet,
   confirmYes() { const f = sheetCtx && sheetCtx.onYes; closeSheet(); if (f) f(); },
   pnav(el) { const n = +el.dataset.n; ui.period = n === 0 ? curPeriod() : shiftPeriod(ui.period, n); render(); },
   expCat(el) { ui.expCat = el.dataset.c; render(); },
   settings: settingsSheet,
 
-  addExpense() { expenseSheet(null); },
-  editExpense(el) { expenseSheet(S.expenses.find((e) => e.id === el.dataset.id)); },
+  addExpense() { entrySheet('out'); },
+  editExpense(el) { entrySheet('out', S.expenses.find((e) => e.id === el.dataset.id)); },
   pickCat(el) {
     sheetCtx.cat = el.dataset.c;
     document.querySelectorAll('#fCats .cat').forEach((b) => b.classList.toggle('on', b.dataset.c === sheetCtx.cat));
+    // Neue Ausgabe: Kategorie antippen speichert sofort, wenn ein Betrag da ist
+    if (sheetCtx.isNew) {
+      if (round2(num($('#fAmount').value)) > 0) ACT.saveExpense();
+      else { toast('Erst den Betrag eintippen'); $('#fAmount').focus(); }
+    }
   },
   saveExpense() {
     const amount = round2(num($('#fAmount').value));
     if (amount <= 0) { toast('Bitte einen Betrag eingeben'); return; }
-    if (!sheetCtx.cat) { toast('Bitte eine Kategorie wählen'); return; }
+    if (!sheetCtx.cat) { toast('Bitte eine Kategorie antippen'); return; }
     const data = { amount, cat: sheetCtx.cat, note: $('#fNote').value.trim(), date: $('#fDate').value || today() };
-    if (sheetCtx.id) Object.assign(S.expenses.find((e) => e.id === sheetCtx.id), data);
-    else S.expenses.push({ id: uid(), t: Date.now(), ...data });
+    let e;
+    if (sheetCtx.id) { e = Object.assign(S.expenses.find((x) => x.id === sheetCtx.id), data); }
+    else { e = { id: uid(), t: Date.now(), ...data }; S.expenses.push(e); }
+    const isNew = !sheetCtx.id;
     save(); closeSheet(); render();
-    const c = calc(periodOf(parseD(data.date)));
-    const dayTotal = S.expenses.filter((e) => e.date === data.date).reduce((a, e) => a + num(e.amount), 0);
-    toast(`−${eur(amount)} · ${data.date === today() ? 'heute' : 'an dem Tag'} ${eur(dayTotal)}${c.inc ? ' · noch ' + eur0(c.free) + ' frei' : ''}`);
+    afterExpense(e, isNew);
   },
   delExpense() {
     const id = sheetCtx.id;
@@ -777,10 +892,15 @@ const ACT = {
     const day = parseInt($('#fDay').value, 10);
     const range = readRange();
     if (!range) { toast('„Gilt bis“ muss nach „Gilt seit“ liegen'); return; }
-    const data = { name, amount, interval: +$('#fInterval').value, cat: $('#fCat').value, day: day >= 1 && day <= 31 ? day : '', ...range };
-    if (sheetCtx.id) Object.assign(S.fixed.find((f) => f.id === sheetCtx.id), data);
-    else S.fixed.push({ id: uid(), ...data });
-    save(); closeSheet(); render(); toast('Fixkosten gespeichert');
+    const toAsset = $('#fToAsset') ? $('#fToAsset').value : '';
+    const tilgung = $('#fTilg') && $('#fTilg').value.trim() ? round2(num($('#fTilg').value)) : '';
+    const data = { name, amount, interval: +$('#fInterval').value, cat: $('#fCat').value, day: day >= 1 && day <= 31 ? day : '', toAsset, tilgung, ...range };
+    const f = sheetCtx.id && S.fixed.find((x) => x.id === sheetCtx.id);
+    let split = false;
+    if (f) split = applyChange(S.fixed, f, data, round2(num(f.amount)) !== amount || (f.interval || 1) !== data.interval);
+    else S.fixed.push({ id: uid(), created: Date.now(), ...data });
+    save(); closeSheet(); render();
+    toast(split ? `Neuer Betrag gilt ab ${monthName(dkey(curPeriod()))} – frühere Monate bleiben` : 'Fixkosten gespeichert');
   },
   toggleFixed(el) {
     const f = S.fixed.find((x) => x.id === el.dataset.id), cur = dkey(curPeriod());
@@ -809,20 +929,29 @@ const ACT = {
     save(); closeSheet(); render(); toast(`${n} Posten gelten jetzt ab ${monthName(k)}`);
   },
 
-  addIncome() { incomeSheet(null); },
-  editIncome(el) { incomeSheet(S.incomes.find((i) => i.id === el.dataset.id)); },
-  pickLabel(el) { $('#fLabel').value = el.dataset.l; el.parentElement.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === el)); },
+  addIncome() { entrySheet('in'); },
+  editIncome(el) { entrySheet('in', S.incomes.find((i) => i.id === el.dataset.id)); },
+  pickLabel(el) {
+    $('#fLabel').value = el.dataset.l; sheetCtx.label = el.dataset.l;
+    el.parentElement.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === el));
+    if (sheetCtx.isNew) {
+      if (round2(num($('#fAmount').value)) > 0) ACT.saveIncome();
+      else { toast('Erst den Betrag eintippen'); $('#fAmount').focus(); }
+    }
+  },
   saveIncome() {
     const amount = round2(num($('#fAmount').value));
     if (amount <= 0) { toast('Bitte einen Betrag eingeben'); return; }
     const data = { amount, label: $('#fLabel').value.trim() || 'Provision', date: $('#fDate').value || today() };
     const editing = !!sheetCtx.id;
-    if (editing) Object.assign(S.incomes.find((i) => i.id === sheetCtx.id), data);
-    else S.incomes.push({ id: uid(), ...data });
+    let inc;
+    if (editing) inc = Object.assign(S.incomes.find((i) => i.id === sheetCtx.id), data);
+    else { inc = { id: uid(), ...data }; S.incomes.push(inc); }
     save(); closeSheet(); render();
     if (editing) { toast('Einnahme geändert: ' + eur(amount)); return; }
     const avg = avgIncome(6);
-    toast(avg ? `+${eur(amount)} · ${amount >= avg ? '▲ ' + eur0(amount - avg) + ' über' : '▼ ' + eur0(avg - amount) + ' unter'} deinem Ø` : `+${eur(amount)} eingetragen`);
+    toast((avg ? `+${eur(amount)} · ${amount >= avg ? '▲ ' + eur0(amount - avg) + ' über' : '▼ ' + eur0(avg - amount) + ' unter'} deinem Ø` : `+${eur(amount)} eingetragen`),
+      () => { S.incomes = S.incomes.filter((i) => i.id !== inc.id); });
   },
   delIncome() {
     const id = sheetCtx.id;
@@ -850,7 +979,12 @@ const ACT = {
   },
   delAsset() {
     const id = sheetCtx.id;
-    confirmSheet('Topf löschen?', 'Der Topf und sein ganzer Verlauf werden entfernt.', 'Löschen', () => { S.assets = S.assets.filter((a) => a.id !== id); save(); render(); });
+    confirmSheet('Topf löschen?', 'Der Topf und sein ganzer Verlauf werden entfernt.', 'Löschen', () => {
+      S.assets = S.assets.filter((a) => a.id !== id);
+      if (S.settings.restTo === id) S.settings.restTo = '';
+      for (const f of S.fixed) if (f.toAsset === id) f.toAsset = '';
+      save(); render();
+    });
   },
   addRec() { recSheet(null); },
   editRec(el) { recSheet(S.recIncomes.find((f) => f.id === el.dataset.id)); },
@@ -861,9 +995,12 @@ const ACT = {
     const range = readRange();
     if (!range) { toast('„Gilt bis“ muss nach „Gilt seit“ liegen'); return; }
     const data = { name, amount, interval: +$('#fInterval').value, ...range };
-    if (sheetCtx.id) Object.assign(S.recIncomes.find((f) => f.id === sheetCtx.id), data);
-    else S.recIncomes.push({ id: uid(), ...data });
-    save(); closeSheet(); render(); toast('Feste Einnahme gespeichert');
+    const f = sheetCtx.id && S.recIncomes.find((x) => x.id === sheetCtx.id);
+    let split = false;
+    if (f) split = applyChange(S.recIncomes, f, data, round2(num(f.amount)) !== amount || (f.interval || 1) !== data.interval);
+    else S.recIncomes.push({ id: uid(), created: Date.now(), ...data });
+    save(); closeSheet(); render();
+    toast(split ? `Neuer Betrag gilt ab ${monthName(dkey(curPeriod()))} – frühere Monate bleiben` : 'Feste Einnahme gespeichert');
   },
   toggleRec(el) {
     const f = S.recIncomes.find((x) => x.id === el.dataset.id), cur = dkey(curPeriod());
@@ -880,6 +1017,7 @@ const ACT = {
     S.settings.taxPct = tax === '' ? (S.settings.taxPct === null ? null : 0) : Math.min(80, Math.max(0, num(tax)));
     S.settings.saveGoal = $('#sSave').value.trim() ? String(round2(num($('#sSave').value))) : '';
     S.settings.varBudget = $('#sBudget').value.trim() ? String(round2(num($('#sBudget').value))) : '';
+    if ($('#sRestTo')) S.settings.restTo = $('#sRestTo').value;
     const oldSd = sd();
     S.settings.startDay = +$('#sStart').value;
     if (oldSd !== sd()) ui.period = curPeriod();
@@ -917,7 +1055,24 @@ const ACT = {
   },
 };
 
+function afterExpense(e, isNew) {
+  const c = calc(periodOf(parseD(e.date)));
+  const dayTotal = S.expenses.filter((x) => x.date === e.date).reduce((a, x) => a + num(x.amount), 0);
+  const msg = `−${eur(num(e.amount))} · ${e.date === today() ? 'heute' : 'an dem Tag'} ${eur(dayTotal)}${c.inc ? ' · noch ' + eur0(c.free) + ' frei' : ''}`;
+  toast(msg, isNew ? () => { S.expenses = S.expenses.filter((x) => x.id !== e.id); } : null);
+}
+
 /* ---------- Events ---------- */
+
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (t.id === 'restToSel') {
+    S.settings.restTo = t.value; save(); render();
+    const a = S.assets.find((x) => x.id === t.value);
+    toast(a ? `Monatsrest fließt ab jetzt automatisch in ${a.name}` : 'Automatik aus');
+  }
+  if (t.id === 'fToAsset') { const a = S.assets.find((x) => x.id === t.value); const w = $('#tilgWrap'); if (w) w.hidden = !(a && a.type === 'schulden'); }
+});
 
 document.addEventListener('click', (ev) => {
   const el = ev.target.closest('[data-a]');
@@ -933,12 +1088,14 @@ document.addEventListener('keydown', (ev) => {
   }
 });
 
-let toastTimer;
-function toast(msg) {
+let toastTimer, undoFn = null;
+function toast(msg, undo) {
   const t = $('#toast');
-  t.textContent = msg; t.hidden = false;
+  undoFn = undo || null;
+  t.innerHTML = '<span>' + esc(msg) + '</span>' + (undo ? '<button class="toast-undo" data-a="undo">Rückgängig</button>' : '');
+  t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
+  toastTimer = setTimeout(() => { t.hidden = true; undoFn = null; }, undo ? 5000 : 2800);
 }
 
 /* ---------- Start ---------- */
