@@ -1,0 +1,16 @@
+{
+  "name": "Reset-Planer",
+  "short_name": "Reset",
+  "description": "Täglicher Begleiter 1.12.–1.4. – Bank, Uni & Privat",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff7fa",
+  "theme_color": "#e8508f",
+  "lang": "de",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
