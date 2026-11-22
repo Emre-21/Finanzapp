@@ -1,0 +1,16 @@
+{
+  "name": "Emres Planer",
+  "short_name": "Planer",
+  "description": "Täglicher Begleiter 1.12.–1.4. – Arbeit, Parfüm-Workshop & Sport",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3ece0",
+  "theme_color": "#141414",
+  "lang": "de",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
