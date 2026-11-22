@@ -241,6 +241,15 @@ nav button.on i{filter:none;opacity:1}
     <input class="field" id="nameIn" placeholder="Name">
   </div>
   <div class="card">
+    <h3>🔔 Erinnerungen</h3>
+    <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Für jeden Termin: <b>3 Tage vorher</b> und <b>am selben Tag</b>.<br>
+    <b>1. App-Benachrichtigung</b> – kommt, sobald du die App öffnest (Android teils auch im Hintergrund).<br>
+    <b>2. Handy-Kalender (am zuverlässigsten)</b> – Termin mit beiden Erinnerungen in den Kalender übernehmen; erinnert dann auch bei geschlossener App (3 Tage vorher um 9 Uhr, am Tag um 8 Uhr).</div>
+    <div class="pre" id="notifState" style="margin-top:10px"></div>
+    <button class="btn" id="notifBtn">App-Benachrichtigungen aktivieren</button>
+    <button class="btn ghost" id="icsAll">Alle Termine in den Kalender 📆</button>
+  </div>
+  <div class="card">
     <h3>💾 Sicherung</h3>
     <div style="font-size:13.5px;color:var(--muted);line-height:1.45">Alles wird nur auf diesem Handy gespeichert – kein Login, keine Cloud. Mach ab und zu eine Sicherung (z. B. sonntags) und schick sie dir selbst per Mail/WhatsApp.</div>
     <button class="btn" id="exportBtn">Sicherung herunterladen</button>
@@ -375,7 +384,7 @@ function dlRow(d,del){
   return `<div class="dl${d.done?' done':''}" data-id="${d.id}">
     <div class="when ${cls}">${lab}</div>
     <div class="info"><div>${c.e} ${esc(d.title)}</div><div>${WD[parse(d.date).getDay()]}, ${fmtShort(d.date)} · ${c.n}</div></div>
-    ${del?'<button class="tmore" data-a="ddel" aria-label="Löschen">✕</button>':''}
+    ${del?'<button class="tmore" data-a="ics" aria-label="In Kalender">📆</button><button class="tmore" data-a="ddel" aria-label="Löschen">✕</button>':''}
     <button class="check" data-a="dtog" style="${d.done?'background:var(--pink)':''}">${d.done?'✓':''}</button>
   </div>`;
 }
@@ -445,6 +454,7 @@ function render(){
   if(view==='week') renderWeek();
   if(view==='dl') renderDl();
   if(view==='more') renderMore();
+  if(view==='more') renderNotif();
 }
 
 // ---------- Aktionen ----------
@@ -514,11 +524,12 @@ $('dlAdd').onclick=()=>{
   if(!t){$('dlTitle').focus();return;}
   if(!d){toast('Bitte ein Datum wählen');return;}
   S.deadlines.push({id:uid(),title:t,date:d,cat:$('dlCat').value,done:false});
-  $('dlTitle').value='';save();render();toast('Termin gespeichert ⏰');
+  $('dlTitle').value='';save();render();notifyDue();toast('Gespeichert – 📆 tippen für Kalender-Erinnerung');
 };
 function dlClick(e){
   const a=e.target.closest('[data-a]'), row=e.target.closest('.dl');if(!a||!row) return;
   const i=S.deadlines.findIndex(x=>x.id===row.dataset.id);if(i<0) return;
+  if(a.dataset.a==='ics'){downloadIcs([S.deadlines[i]]);return;}
   if(a.dataset.a==='dtog') S.deadlines[i].done=!S.deadlines[i].done;
   if(a.dataset.a==='ddel'){if(!confirmSoft(row)) return;S.deadlines.splice(i,1);}
   save();render();
@@ -574,12 +585,88 @@ $('eDel').onclick=()=>{const f=findTask(editRef.id);if(f){S.tasks[f.k].splice(f.
 $('eClose').onclick=closeEdit;
 $('ov').addEventListener('click',e=>{if(e.target.id==='ov') closeEdit();});
 
+
+// ---------- Erinnerungen ----------
+const APP='emre-planer', NKEY=KEY+'.notified', DATA_CACHE=APP+'-data', DATA_URL='./__reminders.json';
+function getSent(){try{return JSON.parse(localStorage.getItem(NKEY)||'{}');}catch(e){return {};}}
+function setSent(o){try{localStorage.setItem(NKEY,JSON.stringify(o));}catch(e){}}
+function dueList(){
+  const t=todayK(), out=[];
+  for(const d of S.deadlines){
+    if(d.done) continue;
+    const n=diff(t,d.date), c=(CATS[d.cat]||{}).n||'';
+    if(n>=1&&n<=3) out.push({tag:d.id+'-pre',title:'⏰ In '+n+(n===1?' Tag':' Tagen')+': '+d.title,body:WDL[parse(d.date).getDay()]+', '+fmtShort(d.date)+' · '+c});
+    if(n===0) out.push({tag:d.id+'-day',title:'📌 Heute: '+d.title,body:c+' – heute ist es so weit!'});
+  }
+  return out;
+}
+async function syncToSW(){
+  // Daten für Hintergrund-Prüfung (Android) bereitstellen und Gesendet-Liste abgleichen
+  try{
+    const c=await caches.open(DATA_CACHE), r=await c.match(DATA_URL);
+    const sent=getSent();
+    if(r){const o=await r.json();Object.assign(sent,o.sent||{});setSent(sent);}
+    await c.put(DATA_URL,new Response(JSON.stringify({deadlines:S.deadlines,sent}),{headers:{'Content-Type':'application/json'}}));
+  }catch(e){}
+}
+async function notifyDue(){
+  await syncToSW();
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  const sent=getSent(); let reg=null;
+  try{reg=await navigator.serviceWorker.getRegistration();}catch(e){}
+  for(const r of dueList()){
+    if(sent[r.tag]) continue;
+    sent[r.tag]=Date.now();
+    try{ if(reg) await reg.showNotification(r.title,{body:r.body,tag:r.tag,icon:'icon-192.png',badge:'icon-192.png'}); else new Notification(r.title,{body:r.body,tag:r.tag}); }catch(e){}
+  }
+  setSent(sent); syncToSW();
+}
+function renderNotif(){
+  const el=$('notifState'), btn=$('notifBtn'); if(!el) return;
+  if(!('Notification' in window)){el.textContent='📱 Benachrichtigungen gehen hier erst, wenn die App über „Zum Home-Bildschirm“ installiert ist. Der Kalender-Weg funktioniert immer.';btn.classList.add('hidden');return;}
+  const p=Notification.permission;
+  el.textContent=p==='granted'?'✅ App-Benachrichtigungen sind aktiv':p==='denied'?'🚫 Blockiert – in den Handy-Einstellungen für diese App erlauben':'Noch nicht aktiviert';
+  btn.classList.toggle('hidden',p!=='default');
+}
+async function enableNotif(){
+  try{
+    const p=await Notification.requestPermission();
+    renderNotif();
+    if(p==='granted'){
+      try{const reg=await navigator.serviceWorker.ready;if(reg.periodicSync){await reg.periodicSync.register('reminders',{minInterval:6*3600*1000});}}catch(e){}
+      toast('Erinnerungen aktiviert 🔔'); notifyDue();
+    }
+  }catch(e){toast('Konnte nicht aktiviert werden');}
+}
+function icsEsc(t){return String(t).replace(/\\/g,'\\\\').replace(/;/g,'\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');}
+function downloadIcs(list){
+  list=list.filter(d=>!d.done);
+  if(!list.length){toast('Keine offenen Termine');return;}
+  const now=new Date(), st=now.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//'+APP+'//DE','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  for(const d of list){
+    const c=(CATS[d.cat]||{}).n||'';
+    L.push('BEGIN:VEVENT','UID:'+d.id+'@'+APP,'DTSTAMP:'+st,'DTSTART;VALUE=DATE:'+d.date.replace(/-/g,''),'DTEND;VALUE=DATE:'+addDays(d.date,1).replace(/-/g,''),
+      'SUMMARY:'+icsEsc(d.title),'DESCRIPTION:'+icsEsc(c),
+      'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+icsEsc('In 3 Tagen: '+d.title),'TRIGGER:-P2DT15H','END:VALARM',
+      'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+icsEsc('Heute: '+d.title),'TRIGGER:PT8H','END:VALARM','END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  const blob=new Blob([L.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=(list.length===1?list[0].title.replace(/[^\wäöüÄÖÜß -]/g,'').trim()||'termin':'alle-termine')+'.ics';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  toast('Datei öffnen → „Zum Kalender hinzufügen“');
+}
+$('notifBtn').onclick=enableNotif;
+$('icsAll').onclick=()=>downloadIcs(S.deadlines);
+
 // Tageswechsel um Mitternacht / beim Zurückkehren
 let lastToday=todayK();
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&todayK()!==lastToday){lastToday=todayK();go(todayK());}else if(!document.hidden) render();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden) notifyDue();if(!document.hidden&&todayK()!==lastToday){lastToday=todayK();go(todayK());}else if(!document.hidden) render();});
 
 render();
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').then(()=>notifyDue()).catch(()=>notifyDue()));}else notifyDue();
 })();
 </script>
 </body>
